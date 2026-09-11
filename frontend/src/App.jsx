@@ -44,7 +44,7 @@ const getStatusDetails = (quantity) => {
 function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
-  const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '' });
+  const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '', role: 'Vendedor' });
 
   const [items, setItems] = useState(() => JSON.parse(localStorage.getItem('controle_items')) || initialItems);
   const [movements, setMovements] = useState(() => JSON.parse(localStorage.getItem('controle_movements')) || initialMovements);
@@ -83,6 +83,8 @@ function App() {
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('controle_cart')) || []);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutMethod, setCheckoutMethod] = useState('PIX');
+  const [purchaseItem, setPurchaseItem] = useState(null);
+  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
 
   // Persistence Effects
   useEffect(() => { localStorage.setItem('controle_items', JSON.stringify(items)); }, [items]);
@@ -559,18 +561,62 @@ function App() {
     }, 2000);
   };
 
-  const addToCart = (item) => {
-    const existing = cart.find(c => c.sku === item.sku);
+  const confirmAddToCart = () => {
+    if (!purchaseItem) return;
+    
+    const existing = cart.find(c => c.sku === purchaseItem.sku);
     if (existing) {
-      setCart(cart.map(c => c.sku === item.sku ? { ...c, cartQuantity: c.cartQuantity + 1 } : c));
+      setCart(cart.map(c => c.sku === purchaseItem.sku ? { ...c, cartQuantity: c.cartQuantity + purchaseQuantity } : c));
     } else {
-      setCart([...cart, { ...item, cartQuantity: 1 }]);
+      setCart([...cart, { ...purchaseItem, cartQuantity: purchaseQuantity }]);
     }
+    
+    setPurchaseItem(null);
+    setIsCartOpen(true);
   };
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    alert(`Compra finalizada com sucesso via ${checkoutMethod}!\nUm de nossos vendedores confirmará o pedido.`);
+
+    const newDealId = Date.now().toString();
+    const dealTotal = cart.reduce((a,c) => a + (c.price * c.cartQuantity), 0);
+    const newDealObj = {
+      id: newDealId,
+      client: 'Cliente Web (' + checkoutMethod + ')',
+      title: 'Venda via Carrinho',
+      value: dealTotal,
+      status: 'Ganho',
+      products: cart.map(c => ({ sku: c.sku, name: c.name, quantity: c.cartQuantity, price: c.price })),
+      salesperson: currentUser.name
+    };
+    
+    setDeals([newDealObj, ...deals]);
+    
+    let updatedItems = [...items];
+    let newMovements = [...movements];
+    const date = new Date().toISOString();
+    
+    cart.forEach(c => {
+      const idx = updatedItems.findIndex(i => i.sku === c.sku);
+      if (idx >= 0) {
+        updatedItems[idx].quantity -= c.cartQuantity;
+        updatedItems[idx].lastMovementDate = date;
+      }
+      newMovements.unshift({
+        id: Date.now().toString() + Math.random().toString(),
+        sku: c.sku,
+        type: 'SAIDA',
+        quantity: c.cartQuantity,
+        date: date,
+        user: currentUser.name,
+        reason: `Venda Carrinho (ID: ${newDealId})`
+      });
+    });
+    
+    setItems(updatedItems);
+    setMovements(newMovements);
+
+    alert(`Compra finalizada com sucesso via ${checkoutMethod}!\nVenda registrada automaticamente no CRM e baixa do estoque efetuada.`);
     setCart([]);
     setIsCartOpen(false);
   };
@@ -616,6 +662,18 @@ function App() {
                 onChange={e => setLoginData({...loginData, company: e.target.value})}
               />
             </div>
+            <div className="form-group" style={{ marginBottom: '2rem' }}>
+              <label>Cargo (Perfil de Acesso)</label>
+              <select 
+                value={loginData.role}
+                onChange={e => setLoginData({...loginData, role: e.target.value})}
+                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+              >
+                <option value="Vendedor">Vendedor</option>
+                <option value="Gestor">Gestor</option>
+                <option value="Administrador">Administrador</option>
+              </select>
+            </div>
             <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
               Entrar no Sistema
             </button>
@@ -654,7 +712,9 @@ function App() {
               setTempCnpj(currentUser.cnpj || '');
               setIsCnpjModalOpen(true);
             }} title="Clique para editar o CNPJ da Empresa">
-              <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{currentUser.name}</div>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                {currentUser.name} <span style={{fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--primary-color)'}}>({currentUser.role || 'Vendedor'})</span>
+              </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{currentUser.company} | CNPJ: {currentUser.cnpj}</div>
             </div>
             
@@ -774,7 +834,7 @@ function App() {
                       <button 
                         className="btn-primary" 
                         style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem' }}
-                        onClick={() => addToCart(item)}
+                        onClick={() => { setPurchaseItem(item); setPurchaseQuantity(1); }}
                       >
                         🛒 Comprar
                       </button>
@@ -1859,6 +1919,38 @@ function App() {
           </div>
         </div>
       )}
+      {/* Purchase Item Quantity Modal */}
+      {purchaseItem && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Quantidade: {purchaseItem.name}</h2>
+              <button className="close-btn" onClick={() => setPurchaseItem(null)}>×</button>
+            </div>
+            <div className="form-group" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+              <label>Estoque disponível: {purchaseItem.quantity}</label>
+              <input 
+                type="number" 
+                min="1" 
+                max={purchaseItem.quantity}
+                value={purchaseQuantity}
+                onChange={e => {
+                  let val = Number(e.target.value);
+                  if (val > purchaseItem.quantity) val = purchaseItem.quantity;
+                  if (val < 1) val = 1;
+                  setPurchaseQuantity(val);
+                }}
+                style={{ fontSize: '2rem', textAlign: 'center', padding: '1rem', width: '100px', margin: '0 auto', display: 'block' }}
+              />
+            </div>
+            <div className="form-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn-secondary" onClick={() => setPurchaseItem(null)}>Cancelar</button>
+              <button type="button" className="btn-primary" onClick={confirmAddToCart}>🛒 Adicionar ao Carrinho</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cart Modal */}
       {isCartOpen && (
         <div className="modal-overlay">
