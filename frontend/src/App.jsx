@@ -73,7 +73,7 @@ function App() {
   // CRM States
   const [deals, setDeals] = useState(() => JSON.parse(localStorage.getItem('controle_deals')) || []);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
-  const [newDeal, setNewDeal] = useState({ client: '', title: '', value: 0, products: [] });
+  const [newDeal, setNewDeal] = useState({ client: '', phone: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
   const [crmTab, setCrmTab] = useState('dashboard');
   const [salesGoal, setSalesGoal] = useState(() => JSON.parse(localStorage.getItem('controle_goal')) || 30500);
@@ -746,6 +746,28 @@ function App() {
               }} 
             />
           </div>
+          
+          {/* Logout Button */}
+          <button 
+            onClick={() => {
+              localStorage.removeItem('controle_user');
+              setCurrentUser(null);
+            }} 
+            style={{
+              background: 'none',
+              border: '1px solid var(--danger)',
+              color: 'var(--danger)',
+              borderRadius: '8px',
+              padding: '0.4rem 0.8rem',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '0.85rem',
+              marginLeft: '0.5rem'
+            }}
+            title="Sair do sistema"
+          >
+            Sair
+          </button>
         </div>
       </header>
 
@@ -797,14 +819,6 @@ function App() {
             <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button className="btn-secondary" onClick={() => setIsCartOpen(true)} style={{ position: 'relative' }}>
-                  🛒 Ver Carrinho
-                  {cart.length > 0 && (
-                    <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: 'var(--primary-color)', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 'bold' }}>
-                      {cart.reduce((a,c) => a + c.cartQuantity, 0)}
-                    </span>
-                  )}
-                </button>
                 <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
                   + Adicionar Produto
                 </button>
@@ -831,13 +845,6 @@ function App() {
                       <span className={`status-badge ${status.className}`}>{status.text}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <button 
-                        className="btn-primary" 
-                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem' }}
-                        onClick={() => { setPurchaseItem(item); setPurchaseQuantity(1); }}
-                      >
-                        🛒 Comprar
-                      </button>
                       <button 
                         className="btn-secondary" 
                         style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem' }}
@@ -1463,6 +1470,8 @@ function App() {
                         <h4 style={{ color: 'var(--text-primary)', marginBottom: '0.25rem' }}>{deal.client}</h4>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{new Date(deal.date).toLocaleDateString('pt-BR')}</span>
                       </div>
+                      <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}><strong>Telefone:</strong> {deal.phone || 'Não informado'}</p>
+                      <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}><strong>Vendedor:</strong> {deal.salesperson || 'Não informado'}</p>
                       <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{deal.title}</p>
                       
                       {deal.products.length > 0 && (
@@ -2076,7 +2085,7 @@ function App() {
               <button className="close-btn" onClick={() => setIsDealModalOpen(false)}>×</button>
             </div>
             <form onSubmit={handleAddDeal}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div className="form-group">
                   <label>Cliente (Nome/Razão Social)</label>
                   <input 
@@ -2088,6 +2097,18 @@ function App() {
                   />
                 </div>
                 <div className="form-group">
+                  <label>Telefone / WhatsApp</label>
+                  <input 
+                    type="text" 
+                    placeholder="(00) 00000-0000"
+                    value={newDeal.phone}
+                    onChange={e => setNewDeal({...newDeal, phone: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
                   <label>Título do Negócio</label>
                   <input 
                     type="text" 
@@ -2095,6 +2116,16 @@ function App() {
                     placeholder="Ex: Venda de 10 Laptops"
                     value={newDeal.title}
                     onChange={e => setNewDeal({...newDeal, title: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Vendedor Responsável</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Nome do vendedor"
+                    value={newDeal.salesperson}
+                    onChange={e => setNewDeal({...newDeal, salesperson: e.target.value})}
                   />
                 </div>
               </div>
