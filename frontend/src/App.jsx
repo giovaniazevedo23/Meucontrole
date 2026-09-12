@@ -3,6 +3,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import logo from './assets/logo.jpg';
 import './App.css';
 
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { db } from './firebase';
+
 // Mocked data to simulate AWS Backend initially
 const initialItems = [
   { id: '1', sku: 'LAP-01', name: 'MacBook Pro 16"', quantity: 45, location: 'A-12', price: 12000, lastMovementDate: '2023-10-01T10:00:00Z' },
@@ -46,8 +49,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
   const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '', role: 'Vendedor' });
 
-  const [items, setItems] = useState(() => JSON.parse(localStorage.getItem('controle_items')) || initialItems);
-  const [movements, setMovements] = useState(() => JSON.parse(localStorage.getItem('controle_movements')) || initialMovements);
+  const [items, setItems] = useState([]);
+  const [movements, setMovements] = useState([]);
   const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('controle_orders')) || []);
   const [activeTab, setActiveTab] = useState('estoque'); // 'estoque', 'movimentacoes', 'relatorios', 'compras'
   
@@ -71,7 +74,7 @@ function App() {
   const fileInputRef = React.useRef(null);
 
   // CRM States
-  const [deals, setDeals] = useState(() => JSON.parse(localStorage.getItem('controle_deals')) || []);
+  const [deals, setDeals] = useState([]);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [newDeal, setNewDeal] = useState({ client: '', phone: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
@@ -87,10 +90,32 @@ function App() {
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
 
   // Persistence Effects
-  useEffect(() => { localStorage.setItem('controle_items', JSON.stringify(items)); }, [items]);
-  useEffect(() => { localStorage.setItem('controle_movements', JSON.stringify(movements)); }, [movements]);
+  useEffect(() => {
+    const unsubItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+      const itemsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setItems(itemsList);
+    });
+
+    const unsubDeals = onSnapshot(collection(db, 'deals'), (snapshot) => {
+      const dealsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDeals(dealsList);
+    });
+
+    const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
+      const movementsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Ordenar por data mais recente primeiro
+      movementsList.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setMovements(movementsList);
+    });
+
+    return () => {
+      unsubItems();
+      unsubDeals();
+      unsubMovements();
+    };
+  }, []);
+
   useEffect(() => { localStorage.setItem('controle_orders', JSON.stringify(orders)); }, [orders]);
-  useEffect(() => { localStorage.setItem('controle_deals', JSON.stringify(deals)); }, [deals]);
   useEffect(() => { localStorage.setItem('controle_user', JSON.stringify(currentUser)); }, [currentUser]);
   useEffect(() => { localStorage.setItem('controle_goal', JSON.stringify(salesGoal)); }, [salesGoal]);
   useEffect(() => { localStorage.setItem('controle_cart', JSON.stringify(cart)); }, [cart]);
@@ -175,7 +200,7 @@ function App() {
   const criticalStockItems = items.filter(i => i.quantity <= 5).length;
   const lowStockItems = items.filter(i => i.quantity > 5 && i.quantity <= 20).length;
 
-  const handleAddItem = (e) => {
+  const handleAddItem = async (e) => {
     e.preventDefault();
     const item = {
       ...newItem,
@@ -184,7 +209,7 @@ function App() {
       price: Number(newItem.price),
       lastMovementDate: new Date().toISOString()
     };
-    setItems([...items, item]);
+    await setDoc(doc(db, 'items', item.id), item);
     
     // Log movement
     const movement = {
@@ -196,25 +221,24 @@ function App() {
       user: currentUser.name,
       reason: 'Cadastro Inicial'
     };
-    setMovements([movement, ...movements]);
+    await setDoc(doc(db, 'movements', movement.id), movement);
 
     setIsModalOpen(false);
     setNewItem({ name: '', sku: '', quantity: 0, location: '', price: 0 });
   };
 
-  const handleDelete = (id) => {
-    setItems(items.filter(item => item.id !== id));
+  const handleDelete = async (id) => {
+    await deleteDoc(doc(db, 'items', id));
   };
 
-  const handleUpdateQuantity = (id, delta, type = delta > 0 ? 'ENTRADA' : 'SAIDA', reason = delta > 0 ? 'Entrada manual' : 'Saída manual') => {
+  const handleUpdateQuantity = async (id, delta, type = delta > 0 ? 'ENTRADA' : 'SAIDA', reason = delta > 0 ? 'Entrada manual' : 'Saída manual') => {
     const item = items.find(i => i.id === id);
     if (!item) return;
     
     const newQuantity = Number(item.quantity) + delta;
-    
     const date = new Date().toISOString();
 
-    setItems(items.map(i => i.id === id ? { ...i, quantity: newQuantity, lastMovementDate: date } : i));
+    await setDoc(doc(db, 'items', id), { ...item, quantity: newQuantity, lastMovementDate: date });
 
     // Log movement
     const movement = {
@@ -226,7 +250,7 @@ function App() {
       user: currentUser.name,
       reason: reason
     };
-    setMovements([movement, ...movements]);
+    await setDoc(doc(db, 'movements', movement.id), movement);
   };
 
   const handleAdjustSubmit = (e) => {
@@ -377,7 +401,7 @@ function App() {
     setNewDeal({ ...newDeal, products: updatedProducts, value: total });
   };
 
-  const handleAddDeal = (e) => {
+  const handleAddDeal = async (e) => {
     e.preventDefault();
     const deal = {
       ...newDeal,
@@ -386,7 +410,7 @@ function App() {
       date: new Date().toISOString(),
       salesperson: currentUser.name
     };
-    setDeals([...deals, deal]);
+    await setDoc(doc(db, 'deals', deal.id), deal);
     setIsDealModalOpen(false);
     setNewDeal({ client: '', title: '', value: 0, products: [] });
   };
@@ -403,14 +427,15 @@ function App() {
         let newMovements = [...movements];
         const date = new Date().toISOString();
 
-        deal.products.forEach(prod => {
+        for (const prod of deal.products) {
           const existingItemIndex = updatedItems.findIndex(i => i.sku === prod.sku);
           if (existingItemIndex >= 0) {
-            updatedItems[existingItemIndex].quantity -= Number(prod.quantity);
-            updatedItems[existingItemIndex].lastMovementDate = date;
+            const updItem = updatedItems[existingItemIndex];
+            updItem.quantity -= Number(prod.quantity);
+            updItem.lastMovementDate = date;
+            await setDoc(doc(db, 'items', updItem.id), updItem);
           } else {
-             // Caso não exista e seja vendido, cadastra negativo? Regra diz saldo negativo é aceito.
-             updatedItems.push({
+             const newItemObj = {
               id: Date.now().toString() + Math.random().toString(),
               sku: prod.sku,
               name: prod.name,
@@ -418,10 +443,12 @@ function App() {
               price: Number(prod.price),
               location: 'Não definida',
               lastMovementDate: date
-            });
+            };
+            await setDoc(doc(db, 'items', newItemObj.id), newItemObj);
+            updatedItems.push(newItemObj);
           }
           
-          newMovements.unshift({
+          const mov = {
             id: Date.now().toString() + Math.random().toString(),
             sku: prod.sku,
             type: 'SAIDA',
@@ -429,19 +456,26 @@ function App() {
             date: date,
             user: currentUser.name,
             reason: `Venda Fechada (Cliente: ${deal.client})`
-          });
-        });
+          };
+          await setDoc(doc(db, 'movements', mov.id), mov);
+        }
         
-        setItems(updatedItems);
-        setMovements(newMovements);
+        deal.status = nextStatus;
+        await setDoc(doc(db, 'deals', dealId), deal);
+      } else {
+        const deal = deals.find(d => d.id === dealId);
+        deal.status = nextStatus;
+        await setDoc(doc(db, 'deals', dealId), deal);
       }
-      
-      setDeals(deals.map(d => d.id === dealId ? { ...d, status: nextStatus } : d));
     }
   };
 
-  const markDealLost = (dealId) => {
-    setDeals(deals.map(d => d.id === dealId ? { ...d, status: 'Perdido' } : d));
+  const markDealLost = async (dealId) => {
+    if(window.confirm('Marcar como Perdido?')) {
+      const deal = deals.find(d => d.id === dealId);
+      deal.status = 'Perdido';
+      await setDoc(doc(db, 'deals', dealId), deal);
+    }
   };
 
   const handleOpenNfeModal = (deal) => {
