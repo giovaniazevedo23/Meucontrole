@@ -6,38 +6,6 @@ import './App.css';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Mocked data to simulate AWS Backend initially
-const initialItems = [
-  { id: '1', sku: 'LAP-01', name: 'MacBook Pro 16"', quantity: 45, location: 'A-12', price: 12000, lastMovementDate: '2023-10-01T10:00:00Z' },
-  { id: '2', sku: 'MON-02', name: 'Monitor Dell 27"', quantity: 12, location: 'B-04', price: 2500, lastMovementDate: '2023-10-05T14:30:00Z' },
-  { id: '3', sku: 'MSE-03', name: 'Logitech MX Master 3', quantity: 150, location: 'C-01', price: 600, lastMovementDate: '2023-10-10T09:15:00Z' },
-  { id: '4', sku: 'KBD-04', name: 'Keychron K2', quantity: 4, location: 'C-02', price: 800, lastMovementDate: '2023-09-20T16:45:00Z' },
-];
-
-const initialMovements = [
-  // Mock movements for Jan
-  { id: 'm1', sku: 'LAP-01', type: 'ENTRADA', quantity: 120, date: '2023-01-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm2', sku: 'LAP-01', type: 'SAIDA', quantity: 80, date: '2023-01-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Fev
-  { id: 'm3', sku: 'LAP-01', type: 'ENTRADA', quantity: 150, date: '2023-02-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm4', sku: 'LAP-01', type: 'SAIDA', quantity: 90, date: '2023-02-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Mar
-  { id: 'm5', sku: 'LAP-01', type: 'ENTRADA', quantity: 200, date: '2023-03-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm6', sku: 'LAP-01', type: 'SAIDA', quantity: 180, date: '2023-03-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Abr
-  { id: 'm7', sku: 'LAP-01', type: 'ENTRADA', quantity: 170, date: '2023-04-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm8', sku: 'LAP-01', type: 'SAIDA', quantity: 210, date: '2023-04-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Mai
-  { id: 'm9', sku: 'LAP-01', type: 'ENTRADA', quantity: 250, date: '2023-05-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm10', sku: 'LAP-01', type: 'SAIDA', quantity: 150, date: '2023-05-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Jun
-  { id: 'm11', sku: 'LAP-01', type: 'ENTRADA', quantity: 310, date: '2023-06-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm12', sku: 'LAP-01', type: 'SAIDA', quantity: 220, date: '2023-06-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  // Jul
-  { id: 'm13', sku: 'LAP-01', type: 'ENTRADA', quantity: 280, date: '2023-07-15T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-  { id: 'm14', sku: 'LAP-01', type: 'SAIDA', quantity: 240, date: '2023-07-20T10:00:00Z', user: 'Admin', reason: 'Histórico' },
-];
-
 const getStatusDetails = (quantity) => {
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
   if (quantity <= 20) return { text: 'Estoque Baixo', className: 'status-low-stock' };
