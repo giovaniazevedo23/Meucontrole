@@ -55,14 +55,7 @@ function App() {
   const [birthdayMessageTemplate, setBirthdayMessageTemplate] = useState("Parabéns {nome}! Você acaba de ganhar um cupom de {desconto}% OFF exclusivo para você! Seu código é: {cupom}");
   const [birthdayDiscount, setBirthdayDiscount] = useState(25);
   
-  const hasUnreadAdmin = deals.some(d => {
-    if (d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido') {
-      if (d.messages && d.messages.length > 0) {
-        return d.messages[d.messages.length - 1].role === 'client';
-      }
-    }
-    return false;
-  });
+  const hasUnreadAdmin = deals.some(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido' && !d.viewedByAdmin);
 
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [trackingModal, setTrackingModal] = useState(null);
@@ -90,6 +83,7 @@ function App() {
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', dueDate: '', status: 'Pendente' });
 
   const [devServices, setDevServices] = useState([]);
+  const [isDevManagerOpen, setIsDevManagerOpen] = useState(false);
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [newDevService, setNewDevService] = useState({ title: '', value: '', dueDate: '', status: 'Pendente' });
 
@@ -297,6 +291,26 @@ function App() {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'pedidos') {
+      deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido' && !d.viewedByAdmin).forEach(async (d) => {
+        try {
+          await updateDoc(doc(db, 'deals', d.id), { viewedByAdmin: true });
+        } catch(e) {}
+      });
+    }
+  }, [activeTab, deals]);
+
+  useEffect(() => {
+    if (activeTab === 'pedidos') {
+      deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido' && !d.viewedByAdmin).forEach(async (d) => {
+        try {
+          await updateDoc(doc(db, 'deals', d.id), { viewedByAdmin: true });
+        } catch(e) {}
+      });
+    }
+  }, [activeTab, deals]);
 
   const handleAddItem = async (e) => {
     e.preventDefault();
@@ -807,7 +821,7 @@ function App() {
   const exportToExcel = () => {
     const data = deals.filter(d => d.archived);
     if (data.length === 0) {
-      alert("Nenhum registro arquivado para exportar.");
+      alert("Nenhum negócio (Ganho ou Perdido) disponível para exportação..");
       return;
     }
     const headers = ["Data", "Protocolo", "Cliente", "Telefone", "Vendedor", "Status", "Valor (R$)", "Produtos"];
@@ -821,7 +835,7 @@ function App() {
         `"${d.phone || ''}"`,
         `"${d.salesperson || ''}"`,
         `"${d.status}"`,
-        d.value.toFixed(2),
+        d.value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
         `"${prods}"`
       ];
       csvRows.push(row.join(','));
@@ -1298,9 +1312,7 @@ function App() {
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
             Lojas (Empresas)
           </button>
-          <button className={activeTab === 'programacao' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('programacao')} style={activeTab !== 'programacao' ? { color: 'var(--text-primary)' } : {}}>
-            Serviços de Programação
-          </button>
+          
         </nav>
 
         {activeTab === 'pedidos' && (
@@ -1322,7 +1334,7 @@ function App() {
                           <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
                         </div>
                         <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-color)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-color)', marginBottom: '1rem' }}>R$ {deal.value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                         
                         <div style={{ marginBottom: '1rem' }}>
                           <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
@@ -1365,7 +1377,7 @@ function App() {
                           <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
                         </div>
                         <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--success)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--success)', marginBottom: '1rem' }}>R$ {deal.value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                         
                         <div style={{ marginBottom: '1rem' }}>
                           <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
@@ -1403,9 +1415,6 @@ function App() {
                 <button className="btn-secondary" onClick={() => setIsOfferModalOpen(true)} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
                   Adicionar Oferta
                 </button>
-                <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: 'var(--primary-color)' }}>
-                  Adicionar Cupom
-                </button>
                 <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
                   + Adicionar Produto
                 </button>
@@ -1426,7 +1435,7 @@ function App() {
                     <div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>SKU: {item.sku}</div>
                       <h3 style={{ margin: '0.25rem 0', color: 'var(--text-primary)', fontSize: '1.1rem' }}>{item.name}</h3>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>R$ {Number(item.price).toFixed(2)}</div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>R$ {Number(item.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{item.sold || 0} vendidos</div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
@@ -1482,9 +1491,7 @@ function App() {
             <button className="btn-secondary" onClick={() => setIsChartModalOpen(true)} style={{ color: 'var(--text-primary)' }}>
               📊 Ver Gráfico
             </button>
-            <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: 'var(--primary-color)' }}>
-              🎟️ Adicionar Cupom
-            </button>
+            
             <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
               + Adicionar Produto
             </button>
@@ -1520,12 +1527,12 @@ function App() {
                     {item.isOffer ? (
                       <div>
                         <span style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', fontSize: '0.75rem', marginRight: '0.5rem' }}>
-                          R$ {Number(item.originalPrice).toFixed(2)}
+                          R$ {Number(item.originalPrice).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </span>
-                        <strong style={{ color: 'var(--danger)' }}>R$ {Number(item.price).toFixed(2)}</strong>
+                        <strong style={{ color: 'var(--danger)' }}>R$ {Number(item.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
                       </div>
                     ) : (
-                      <span>R$ {Number(item.price).toFixed(2)}</span>
+                      <span>R$ {Number(item.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     )}
                   </td>
                   <td>{item.location}</td>
@@ -1580,7 +1587,8 @@ function App() {
                 <button className={movementFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('ALL')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Todas</button>
                 <button className={movementFilter === 'ENTRADA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('ENTRADA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>↓ Entradas</button>
                 <button className={movementFilter === 'SAIDA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('SAIDA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>↑ Saídas</button>
-                <button className={movementFilter === 'PERDA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('PERDA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>🚨 Perdas/Avarias</button>
+                <button className={movementFilter === 'PERDA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('PERDA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Perdas/Avarias</button>
+                <button className={movementFilter === 'CLIENTE' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('CLIENTE')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Clientes (Vendas)</button>
               </div>
             </div>
             
@@ -1594,24 +1602,28 @@ function App() {
                     <th>Qtd</th>
                     <th>Motivo</th>
                     <th>Usuário</th>
+                    <th>Cliente</th>
+                    <th>Cliente</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.filter(m => movementFilter === 'ALL' || m.type === movementFilter).map(m => (
+                  {movements.filter(m => (movementFilter === 'ALL' || (movementFilter === 'CLIENTE' && (m.client || m.reason?.includes('(Cliente:'))) || m.type === movementFilter)).map(m => (
                     <tr key={m.id}>
                       <td>{new Date(m.date).toLocaleString('pt-BR')}</td>
                       <td>{m.sku}</td>
                       <td>
                         <span className={`status-badge ${m.type === 'ENTRADA' ? 'status-in-stock' : m.type === 'SAIDA' ? 'status-low-stock' : m.type === 'PERDA' ? 'status-critical' : 'status-low-stock'}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'fit-content' }}>
-                          {m.type === 'ENTRADA' ? '↓' : m.type === 'SAIDA' ? '↑' : m.type === 'PERDA' ? '🚨' : '⚙️'} {m.type}
+                          {m.type === 'ENTRADA' ? '↓' : m.type === 'SAIDA' ? '↑' : '⚙️'} {m.type}
                         </span>
                       </td>
                       <td>{m.quantity}</td>
                       <td>{m.reason}</td>
                       <td>{m.user}</td>
+                      <td>{m.client || (m.reason?.includes('(Cliente:') ? m.reason.split('(Cliente:')[1].replace(')','') : "-")}</td>
+                      <td>{m.client || (m.reason?.includes('(Cliente:') ? m.reason.split('(Cliente:')[1].replace(')','') : "-")}</td>
                     </tr>
                   ))}
-                  {movements.filter(m => movementFilter === 'ALL' || m.type === movementFilter).length === 0 && (
+                  {movements.filter(m => (movementFilter === 'ALL' || (movementFilter === 'CLIENTE' && (m.client || m.reason?.includes('(Cliente:'))) || m.type === movementFilter)).length === 0 && (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Nenhuma movimentação encontrada para este filtro.</td>
                     </tr>
@@ -1677,11 +1689,11 @@ function App() {
                           <td>{item.name} {item.isHighDemand && <span style={{ marginLeft: '0.5rem', background: '#ee4d2d', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>🔥 Últimas Unidades</span>}</td>
                           <td>{item.sku}</td>
                           <td>{item.quantity}</td>
-                          <td><strong>R$ {item.totalValue.toFixed(2)}</strong></td>
+                          <td><strong>R$ {item.totalValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td>
                           <td>
                             {item.curva === 'A' && item.quantity <= 10 ? (
                               <button className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'var(--danger)', boxShadow: 'none' }} onClick={() => { setActiveTab('compras'); setIsOrderModalOpen(true); }}>
-                                🚨 Reposição Imediata
+                                 Reposição Imediata
                               </button>
                             ) : (
                               <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Estoque Adequado</span>
@@ -1765,7 +1777,7 @@ function App() {
                               <td>{item ? `${item.name} (${item.sku})` : 'Produto Excluído'}</td>
                               <td>{m.reason}</td>
                               <td>{m.quantity} und</td>
-                              <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>R$ {val.toFixed(2)}</td>
+                              <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>R$ {val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             </tr>
                           );
                         })
@@ -1805,7 +1817,7 @@ function App() {
                       <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0' }}>Emissão: {order.issueDate ? new Date(order.issueDate).toLocaleDateString('pt-BR') : 'N/A'}</p>
                       
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                        <span className="card-value" style={{ fontSize: '1.1rem' }}>R$ {Number(order.totalValue).toFixed(2)}</span>
+                        <span className="card-value" style={{ fontSize: '1.1rem' }}>R$ {Number(order.totalValue).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         {status === 'Recebido' ? (
                           <span style={{ fontSize: '0.85rem', color: 'var(--success)', fontWeight: 'bold' }}>▷ Concluído</span>
                         ) : (
@@ -1851,7 +1863,7 @@ function App() {
                     <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
                       <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Vendas (Mês atual)</h3>
                       <div style={{ fontSize: '2.5rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                        R$ {totalWonValue.toFixed(2)}
+                        R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                       </div>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0.5rem 0 0 0' }}>
                         {deals.filter(d => d.status === 'Ganho').length} vendas realizadas
@@ -1882,9 +1894,9 @@ function App() {
                         </div>
                         <div>
                           <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Já vendeu</p>
-                          <h3 style={{ margin: '0 0 1rem 0', color: 'var(--primary-color)' }}>R$ {totalWonValue.toFixed(2)}</h3>
+                          <h3 style={{ margin: '0 0 1rem 0', color: 'var(--primary-color)' }}>R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
                           <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Da meta de</p>
-                          <h3 style={{ margin: 0, color: '#3b82f6' }}>R$ {salesGoal.toFixed(2)}</h3>
+                          <h3 style={{ margin: 0, color: '#3b82f6' }}>R$ {salesGoal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
                         </div>
                       </div>
 
@@ -1895,7 +1907,7 @@ function App() {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} style={{ fontSize: '0.75rem', fontWeight: 'bold' }} />
                             <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val/1000}k`} style={{ fontSize: '0.75rem' }} />
-                            <Tooltip formatter={(value) => [`R$ ${value.toFixed(2)}`, 'Vendas']} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                            <Tooltip formatter={(value) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 'Vendas']} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                             <Bar dataKey="vendas" fill="var(--primary-color)" radius={[4, 4, 0, 0]} barSize={30}>
                               <LabelList dataKey="vendas" position="top" formatter={(val) => `R$${val.toFixed(0)}`} style={{ fontSize: '0.7rem', fill: 'var(--text-secondary)' }} />
                             </Bar>
@@ -1909,15 +1921,18 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', flex: 1 }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Contas a receber</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+    <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Contas a receber</h3>
+    <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setIsDevManagerOpen(true)}>+ Serviços de Programação</button>
+  </div>
                         <div style={{ fontSize: '2.5rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↓ R$ {totalWonValue.toFixed(2)}
+                          ↓ R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {receivedByPix > 0 && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '99px' }}>PIX: R$ {receivedByPix.toFixed(2)}</span>}
-                          {receivedByCard > 0 && <span style={{ background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: '99px' }}>Cartão: R$ {receivedByCard.toFixed(2)}</span>}
-                          {receivedByCredit > 0 && <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '99px' }}>Crediário: R$ {receivedByCredit.toFixed(2)}</span>}
-                          {receivedByOther > 0 && <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: '99px' }}>Outros: R$ {receivedByOther.toFixed(2)}</span>}
+                          {receivedByPix > 0 && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '99px' }}>PIX: R$ {receivedByPix.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
+                          {receivedByCard > 0 && <span style={{ background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: '99px' }}>Cartão: R$ {receivedByCard.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
+                          {receivedByCredit > 0 && <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '99px' }}>Crediário: R$ {receivedByCredit.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
+                          {receivedByOther > 0 && <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: '99px' }}>Outros: R$ {receivedByOther.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
                           {totalWonValue === 0 && <span style={{ color: '#999' }}>Nenhuma venda ainda</span>}
                         </div>
                       </div>
@@ -1927,18 +1942,18 @@ function App() {
                           <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setIsExpenseModalOpen(true)}>+ Despesa</button>
                         </div>
                         <div style={{ fontSize: '2.5rem', color: 'var(--danger)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↑ R$ {totalPendingExpenses.toFixed(2)}
+                          ↑ R$ {totalPendingExpenses.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}>
-                          <span style={{ color: '#dc2626' }}>Pendente: R$ {totalPendingExpenses.toFixed(2)}</span>
-                          <span style={{ color: '#16a34a' }}>Pago: R$ {totalPaidExpenses.toFixed(2)}</span>
+                          <span style={{ color: '#dc2626' }}>Pendente: R$ {totalPendingExpenses.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                          <span style={{ color: '#16a34a' }}>Pago: R$ {totalPaidExpenses.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         </div>
                         {expenses.length > 0 && (
                           <div style={{ marginTop: '0.75rem', maxHeight: '100px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {expenses.slice(0, 5).map(exp => (
                               <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', background: exp.status === 'Pago' ? '#f0fdf4' : '#fff7ed', padding: '4px 8px', borderRadius: '6px' }}>
                                 <span style={{ color: '#333', flex: 1 }}>{exp.description}</span>
-                                <span style={{ fontWeight: 'bold', color: exp.status === 'Pago' ? '#16a34a' : '#dc2626', marginLeft: '0.5rem' }}>R$ {Number(exp.amount).toFixed(2)}</span>
+                                <span style={{ fontWeight: 'bold', color: exp.status === 'Pago' ? '#16a34a' : '#dc2626', marginLeft: '0.5rem' }}>R$ {Number(exp.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                                 <button onClick={() => handleToggleExpenseStatus(exp)} style={{ marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: exp.status === 'Pago' ? '#dc2626' : '#16a34a', padding: '2px 5px' }}>
                                   {exp.status === 'Pago' ? '↩ Reverter' : '✓ Pago'}
                                 </button>
@@ -1957,7 +1972,7 @@ function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center', marginBottom: '2rem' }}>
                         <div>
                           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>Vendas no período</p>
-                          <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>R$ {totalWonValue.toFixed(2)}</h3>
+                          <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
                         </div>
                         <div>
                           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>Peças vendidas</p>
@@ -1965,7 +1980,7 @@ function App() {
                         </div>
                         <div>
                           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>Ticket médio</p>
-                          <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>R$ {avgTicket.toFixed(2)}</h3>
+                          <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>R$ {avgTicket.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
                         </div>
                         <div>
                           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>Clientes que compraram</p>
@@ -1999,7 +2014,7 @@ function App() {
                                   <div style={{ width: '25px', height: '25px', borderRadius: '50%', background: i===0?'#fbbf24':i===1?'#9ca3af':i===2?'#b45309':'#e2e8f0', color: i===3?'#000':'#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{i+1}</div>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{d.client}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Comprou R$ {Number(d.value).toFixed(2)}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Comprou R$ {Number(d.value).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                                   </div>
                                 </li>
                               ));
@@ -2078,9 +2093,9 @@ function App() {
                             }} 
                             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
                             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                            title={`R$ ${stage.actualValue.toFixed(2)}`}>
+                            title={`R$ ${stage.actualValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}>
                               <span style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{stage.name}</span>
-                              <span style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{stage.count} neg. (R$ {stage.actualValue.toFixed(2)})</span>
+                              <span style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}>{stage.count} neg. (R$ {stage.actualValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>
                             </div>
                           );
                         })}
@@ -2093,15 +2108,15 @@ function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
                     <span className="stat-title">Valor em Aberto (Funil)</span>
-                    <span className="stat-value" style={{ color: 'var(--primary-color)' }}>R$ {totalCrmValue.toFixed(2)}</span>
+                    <span className="stat-value" style={{ color: 'var(--primary-color)' }}>R$ {totalCrmValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                   </div>
                   <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
                     <span className="stat-title">Vendas Ganhas</span>
-                    <span className="stat-value" style={{ color: 'var(--success)' }}>R$ {totalWonValue.toFixed(2)}</span>
+                    <span className="stat-value" style={{ color: 'var(--success)' }}>R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                   </div>
                   <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
                     <span className="stat-title">Ticket Médio</span>
-                    <span className="stat-value">R$ {avgTicket.toFixed(2)}</span>
+                    <span className="stat-value">R$ {avgTicket.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                   </div>
                   <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
                     <span className="stat-title">Taxa de Conversão</span>
@@ -2154,7 +2169,7 @@ function App() {
                       
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                         <span className="card-value" style={{ fontSize: '1rem', color: status === 'Ganho' ? 'var(--success)' : status === 'Perdido' ? 'var(--danger)' : 'var(--primary-hover)' }}>
-                          R$ {Number(deal.value).toFixed(2)}
+                          R$ {Number(deal.value).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </span>
                         
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -2287,9 +2302,10 @@ function App() {
       </div>
     )}
 
-    {activeTab === 'programacao' && (
-      <>
-        <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    {isDevManagerOpen && (
+    <div className="modal-overlay" onClick={() => setIsDevManagerOpen(false)} style={{ zIndex: 1000 }}>
+      <div className="modal-content glass-panel" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '800px', padding: '1.5rem', borderRadius: '1rem', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="toolbar" style={{ marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Controle de Serviços (Programação)</h2>
           <button className="btn-primary" onClick={() => setIsDevModalOpen(true)}>
             + Adicionar Serviço
@@ -2313,7 +2329,7 @@ function App() {
                   devServices.map(svc => (
                     <tr key={svc.id}>
                       <td>{svc.title}</td>
-                      <td style={{ fontWeight: 'bold' }}>R$ {Number(svc.value).toFixed(2)}</td>
+                      <td style={{ fontWeight: 'bold' }}>R$ {Number(svc.value).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                       <td>{new Date(svc.dueDate).toLocaleDateString('pt-BR')}</td>
                       <td>
                         <span style={{ 
@@ -2383,8 +2399,9 @@ function App() {
             </div>
           </div>
         )}
-      </>
-    )}
+      </div>
+    </div>
+  )}
       </main>
 
       {/* Add Modal */}
@@ -2675,7 +2692,7 @@ function App() {
                 <select required value={offerFormData.itemId} onChange={e => setOfferFormData({...offerFormData, itemId: e.target.value})}>
                   <option value="">-- Escolha um produto --</option>
                   {items.map(i => (
-                    <option key={i.id} value={i.id}>{i.sku} - {i.name} (R$ {Number(i.price).toFixed(2)})</option>
+                    <option key={i.id} value={i.id}>{i.sku} - {i.name} (R$ {Number(i.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</option>
                   ))}
                 </select>
               </div>
@@ -2791,7 +2808,7 @@ function App() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--glass-bg)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
                 <span style={{ fontWeight: 'bold' }}>Valor Total Calculado:</span>
-                <span style={{ fontSize: '1.2rem', color: 'var(--success)', fontWeight: 'bold' }}>R$ {newOrder.totalValue.toFixed(2)}</span>
+                <span style={{ fontSize: '1.2rem', color: 'var(--success)', fontWeight: 'bold' }}>R$ {newOrder.totalValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
               <div className="form-actions">
                 <button type="button" className="btn-secondary" onClick={() => setIsOrderModalOpen(false)}>Cancelar</button>
@@ -2818,7 +2835,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               {items.filter(i => i.quantity <= 20).sort((a, b) => a.quantity - b.quantity).map(item => (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1rem', borderRadius: '0.5rem', background: item.quantity <= 5 ? '#fee2e2' : '#ffedd5', border: `1px solid ${item.quantity <= 5 ? '#ef4444' : '#f59e0b'}` }}>
-                  <span style={{ fontSize: '1.5rem' }}>{item.quantity <= 5 ? '🚨' : '⚠️'}</span>
+                  <span style={{ fontSize: '1.5rem' }}>{item.quantity <= 5 ? '' : '⚠️'}</span>
                   <div>
                     <h4 style={{ margin: '0 0 0.25rem 0', color: item.quantity <= 5 ? '#991b1b' : '#9a3412', fontSize: '0.9rem' }}>{item.name}</h4>
                     <p style={{ margin: 0, fontSize: '0.8rem', color: item.quantity <= 5 ? '#b91c1c' : '#b45309' }}>
@@ -2884,7 +2901,7 @@ function App() {
                   <div className="nfe-field">
                     <label>Valor Total da Nota Fiscal</label>
                     <div className="nfe-value" style={{ background: '#f8fafc', color: 'var(--text-primary)', fontWeight: 'bold' }}>
-                      R$ {Number(selectedOrder.totalValue).toFixed(2)}
+                      R$ {Number(selectedOrder.totalValue).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
                   </div>
                 </div>
@@ -2925,7 +2942,7 @@ function App() {
                             <td>{p.sku}</td>
                             <td>{p.name}</td>
                             <td>{p.quantity}</td>
-                            <td>R$ {Number(p.price).toFixed(2)}</td>
+                            <td>R$ {Number(p.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             <td>
                               {exists ? (
                                 <span><span style={{color: '#16a34a'}}>✓</span> Associado com o produto {p.sku} - {p.name}</span>
@@ -3008,7 +3025,7 @@ function App() {
                       <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                         <td style={{ padding: '0.5rem' }}>{c.name}</td>
                         <td style={{ textAlign: 'center' }}>{c.cartQuantity}</td>
-                        <td style={{ textAlign: 'center' }}>R$ {(c.price * c.cartQuantity).toFixed(2)}</td>
+                        <td style={{ textAlign: 'center' }}>R$ {(c.price * c.cartQuantity).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td style={{ textAlign: 'center' }}>
                           <button style={{ color: 'red', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setCart(cart.filter(item => item.sku !== c.sku))}>X</button>
                         </td>
@@ -3024,7 +3041,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
                   <span>Total:</span>
                   <span style={{ color: 'var(--primary-color)' }}>
-                    R$ {cart.reduce((a,c) => a + (c.price * c.cartQuantity), 0).toFixed(2)}
+                    R$ {cart.reduce((a,c) => a + (c.price * c.cartQuantity), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </span>
                 </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
@@ -3224,7 +3241,7 @@ function App() {
                   >
                     <option value="">Selecione um Produto...</option>
                     {items.map(item => (
-                      <option key={item.id} value={item.sku}>{item.name} (SKU: {item.sku} - R$ {Number(item.price).toFixed(2)})</option>
+                      <option key={item.id} value={item.sku}>{item.name} (SKU: {item.sku} - R$ {Number(item.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</option>
                     ))}
                   </select>
                 </div>
@@ -3253,7 +3270,7 @@ function App() {
                           <td>{p.sku}</td>
                           <td>{p.quantity}</td>
                           <td>R$ {p.price}</td>
-                          <td>R$ {(p.quantity * p.price).toFixed(2)}</td>
+                          <td>R$ {(p.quantity * p.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                           <td><button type="button" onClick={() => handleRemoveProductFromDeal(i)} style={{ color: 'red', background: 'none', border: 'none', cursor: 'pointer' }}>X</button></td>
                         </tr>
                       ))}
@@ -3264,7 +3281,7 @@ function App() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--glass-bg)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', marginTop: '1rem' }}>
                 <span style={{ fontWeight: 'bold' }}>Valor Total da Oportunidade:</span>
-                <span style={{ fontSize: '1.2rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>R$ {newDeal.value.toFixed(2)}</span>
+                <span style={{ fontSize: '1.2rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>R$ {newDeal.value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
               <div className="form-actions">
                 <button type="button" className="btn-secondary" onClick={() => setIsDealModalOpen(false)}>Cancelar</button>
@@ -3369,8 +3386,8 @@ function App() {
                           <td>{p.sku}</td>
                           <td>{nfeFormData.ncm}</td>
                           <td>{p.quantity}</td>
-                          <td>R$ {Number(p.price).toFixed(2)}</td>
-                          <td><strong>R$ {(p.quantity * p.price).toFixed(2)}</strong></td>
+                          <td>R$ {Number(p.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                          <td><strong>R$ {(p.quantity * p.price).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td>
                         </tr>
                       ))}
                     </tbody>
@@ -3380,11 +3397,11 @@ function App() {
                 {/* 5. Resumo e Botões */}
                 <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '0.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Impostos Aproximados (ICMS/PIS/COFINS): <strong style={{ color: 'var(--warning)' }}>R$ {(selectedNfeDeal.value * 0.18).toFixed(2)}</strong></p>
+                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Impostos Aproximados (ICMS/PIS/COFINS): <strong style={{ color: 'var(--warning)' }}>R$ {(selectedNfeDeal.value * 0.18).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
                     <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total dos Produtos:</p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>R$ {Number(selectedNfeDeal.value).toFixed(2)}</span>
+                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>R$ {Number(selectedNfeDeal.value).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                   </div>
                 </div>
 
@@ -3430,7 +3447,7 @@ function App() {
                       <tr key={deal.id}>
                         <td>{new Date(deal.date).toLocaleDateString('pt-BR')}</td>
                         <td>{deal.client}</td>
-                        <td><strong>R$ {Number(deal.value).toFixed(2)}</strong></td>
+                        <td><strong>R$ {Number(deal.value).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td>
                         <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                           {deal.chaveAcesso ? deal.chaveAcesso.replace(/(\d{4})/g, '$1 ').trim() : '3526 0900 ... 5500 1000'}
                         </td>
