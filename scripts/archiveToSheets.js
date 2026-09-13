@@ -298,7 +298,7 @@ function atualizarVendasControle() {
     const custData = JSON.parse(custResp.getContentText());
     const customers = (custData.documents || []).map(d => parseFirestoreDoc(d));
     const aniversariantes = customers
-      .filter(c => { try { return new Date(c.birthDate || c.birthday).getMonth() + 1 === mesAtual; } catch(e) { return false; } })
+      .filter(c => { try { return new Date((c.birthDate || c.birthday) + 'T12:00:00').getMonth() + 1 === mesAtual; } catch(e) { return false; } })
       .map(c => c.name)
       .join(', ');
 

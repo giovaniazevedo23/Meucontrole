@@ -938,6 +938,15 @@ function App() {
         
         deal.status = nextStatus;
         await setDoc(doc(db, 'deals', dealId), deal);
+        
+        // Update customer purchases count if linked
+        if (deal.customerCpf) {
+          const customer = customers.find(c => c.cpf === deal.customerCpf);
+          if (customer) {
+            const updatedCustomer = { ...customer, purchases: (customer.purchases || customer.totalPurchases || 0) + 1 };
+            await setDoc(doc(db, 'customers', customer.id), updatedCustomer);
+          }
+        }
       } else {
         const deal = deals.find(d => d.id === dealId);
         deal.status = nextStatus;
@@ -2216,7 +2225,7 @@ function App() {
                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                             {customers.filter(c => {
                               if (!c.birthday) return false;
-                              const bDate = new Date(c.birthday);
+                              const bDate = new Date(c.birthday + 'T12:00:00');
                               const today = new Date();
                               return bDate.getDate() === today.getDate() && bDate.getMonth() === today.getMonth();
                             }).map((c, idx) => (
@@ -2235,7 +2244,7 @@ function App() {
                             ))}
                             {customers.filter(c => {
                               if (!c.birthday) return false;
-                              const bDate = new Date(c.birthday);
+                              const bDate = new Date(c.birthday + 'T12:00:00');
                               const today = new Date();
                               return bDate.getDate() === today.getDate() && bDate.getMonth() === today.getMonth();
                             }).length === 0 && (
