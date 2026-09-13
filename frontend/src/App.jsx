@@ -931,7 +931,9 @@ function App() {
             quantity: Number(prod.quantity),
             date: date,
             user: currentUser.name,
-            reason: `Venda Fechada (Cliente: ${deal.client})`
+            client: deal.client,
+            reason: `Venda Fechada (Cliente: ${deal.client})`,
+            companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
           };
           await setDoc(doc(db, 'movements', mov.id), mov);
         }
@@ -1892,11 +1894,16 @@ function App() {
                     >
                       {sheetsLoading ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                          <img src="/clock.png" alt="Carregando" style={{ width: '16px', height: '16px' }} />
                           Carregando...
                         </div>
                       ) : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
                     </button>
+                    {lastSyncTime && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '0.5rem' }}>
+                        Última atualização: {lastSyncTime}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1909,7 +1916,7 @@ function App() {
                 {sheetsLoading && (
                   <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
                     <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'center' }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      <img src="/clock.png" alt="Carregando" style={{ width: '32px', height: '32px' }} />
                     </div>
                     <p style={{ margin: 0 }}>Buscando dados da planilha...</p>
                   </div>
