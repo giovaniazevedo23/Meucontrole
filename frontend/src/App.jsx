@@ -1816,7 +1816,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <div>
                     <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      📊 Planilhas Arquivadas (Google Sheets)
+                      Planilhas Arquivadas (Google Sheets)
                     </h3>
                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       Dados históricos arquivados automaticamente pelo Apps Script
@@ -1834,14 +1834,14 @@ function App() {
                             sheetsActiveTab
                           )}
                         >
-                          ⬇ Excel (aba atual)
+                          Excel (aba atual)
                         </button>
                         <button
                           className="btn-secondary"
                           style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
                           onClick={() => exportMultipleSheetsToExcel(sheetsData, 'Relatorio_Completo')}
                         >
-                          ⬇ Excel (tudo)
+                          Excel (tudo)
                         </button>
                         <button
                           className="btn-secondary"
@@ -1852,7 +1852,7 @@ function App() {
                             sheetsActiveTab
                           )}
                         >
-                          ⬇ PDF
+                          PDF
                         </button>
                       </>
                     )}
@@ -1862,21 +1862,20 @@ function App() {
                       onClick={handleLoadSheets}
                       disabled={sheetsLoading}
                     >
-                      {sheetsLoading ? '⏳ Carregando...' : sheetsLoaded ? '🔄 Atualizar' : '📥 Carregar Planilhas'}
+                      {sheetsLoading ? '⏱️ Carregando...' : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
                     </button>
                   </div>
                 </div>
 
                 {!sheetsLoaded && !sheetsLoading && (
                   <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(26,115,232,0.04)', borderRadius: '0.75rem', border: '1px dashed rgba(26,115,232,0.2)' }}>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📋</div>
                     <p style={{ margin: 0, fontWeight: 500 }}>Clique em "Carregar Planilhas" para buscar os dados arquivados do Google Sheets</p>
                   </div>
                 )}
 
                 {sheetsLoading && (
                   <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏱️</div>
                     <p style={{ margin: 0 }}>Buscando dados da planilha...</p>
                   </div>
                 )}

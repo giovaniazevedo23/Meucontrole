@@ -164,12 +164,8 @@ function arquivarMovementsAntigos() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaMovements);
     if (!sheet) return;
 
-    const trintaDiasAtras = new Date();
-    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-
     data.documents.forEach(doc => {
       const mov = parseFirestoreDoc(doc);
-      if (new Date(mov.date) >= trintaDiasAtras) return;
 
       // Separa data e hora
       let data_str = '';
