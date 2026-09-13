@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, FunnelChart, Funnel, LabelList } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, FunnelChart, Funnel, LabelList, BarChart, Bar } from 'recharts';
 import logo from './assets/logo.jpg';
 import './App.css';
 
-import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, getDocs, query, where, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-
+import { generateDanfeHtml } from './utils/danfeTemplate';
 const getStatusDetails = (quantity) => {
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
   if (quantity <= 20) return { text: 'Estoque Baixo', className: 'status-low-stock' };
@@ -15,7 +15,8 @@ const getStatusDetails = (quantity) => {
 function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
-  const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '', role: 'Vendedor' });
+  const [loginMode, setLoginMode] = useState('login'); // 'login' | 'register'
+  const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '', companyCnpj: '', role: 'Vendedor', phone: '' });
 
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -25,12 +26,17 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
-  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [adjustItem, setAdjustItem] = useState(null);
+  const [editItem, setEditItem] = useState(null);
+  const [editFormData, setEditFormData] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3 });
+  const [offerFormData, setOfferFormData] = useState({ itemId: '', offerPrice: 0, hours: 24 });
+  const [coupons, setCoupons] = useState([]);
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [newCoupon, setNewCoupon] = useState({ code: '', discount: 10, expireDays: 30, usageLimit: '' });
   
-  const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0 });
-  const [adjustData, setAdjustData] = useState({ reason: '', type: 'AJUSTE', quantity: 0 });
+  const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3 });
   const [newOrder, setNewOrder] = useState({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
   const [orderProduct, setOrderProduct] = useState({ sku: '', name: '', quantity: 1, price: 0, location: '' });
   const [showNotifications, setShowNotifications] = useState(false);
@@ -43,7 +49,23 @@ function App() {
 
   // CRM States
   const [deals, setDeals] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [isBirthdayMessageModalOpen, setIsBirthdayMessageModalOpen] = useState(false);
+  const [birthdayMessageTemplate, setBirthdayMessageTemplate] = useState("Parabéns {nome}! Você acaba de ganhar um cupom de {desconto}% OFF exclusivo para você! Seu código é: {cupom}");
+  const [birthdayDiscount, setBirthdayDiscount] = useState(25);
+  
+  const hasUnreadAdmin = deals.some(d => {
+    if (d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido') {
+      if (d.messages && d.messages.length > 0) {
+        return d.messages[d.messages.length - 1].role === 'client';
+      }
+    }
+    return false;
+  });
+
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
+  const [trackingModal, setTrackingModal] = useState(null);
+  const [internalChat, setInternalChat] = useState(null);
   const [newDeal, setNewDeal] = useState({ client: '', phone: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
   const [crmTab, setCrmTab] = useState('dashboard');
@@ -57,31 +79,50 @@ function App() {
   const [purchaseItem, setPurchaseItem] = useState(null);
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
 
-  // Persistence Effects
+  // Companies / Lojas States
+  const [companies, setCompanies] = useState([]);
+  const [newCompany, setNewCompany] = useState({ name: '', cnpj: '' });
+
   useEffect(() => {
-    const unsubItems = onSnapshot(collection(db, 'items'), (snapshot) => {
-      const itemsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setItems(itemsList);
+    if (!currentUser || !currentUser.companyCnpj) {
+      const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
+        setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+      return () => { unsubComp(); };
+    }
+
+    const activeCnpj = currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00';
+    const itemsQ = query(collection(db, 'items'), where('companyCnpj', '==', activeCnpj));
+    const unsubItems = onSnapshot(itemsQ, (snap) => {
+      setItems(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubDeals = onSnapshot(collection(db, 'deals'), (snapshot) => {
-      const dealsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setDeals(dealsList);
+    const dealsQ = query(collection(db, 'deals'), where('companyCnpj', '==', activeCnpj));
+    const unsubDeals = onSnapshot(dealsQ, (snap) => {
+      setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
-      const movementsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Ordenar por data mais recente primeiro
-      movementsList.sort((a, b) => new Date(b.date) - new Date(a.date));
-      setMovements(movementsList);
+    const movQ = query(collection(db, 'movements'), where('companyCnpj', '==', activeCnpj));
+    const unsubMov = onSnapshot(movQ, (snap) => {
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setMovements(list);
     });
 
-    return () => {
-      unsubItems();
-      unsubDeals();
-      unsubMovements();
-    };
-  }, []);
+    const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
+      setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubCoupons = onSnapshot(query(collection(db, 'coupons'), where('companyCnpj', '==', activeCnpj)), (snap) => {
+      setCoupons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
+      setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => { unsubItems(); unsubDeals(); unsubMov(); unsubComp(); unsubCoupons(); unsubCustomers(); };
+  }, [currentUser]);
 
   useEffect(() => { localStorage.setItem('controle_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('controle_user', JSON.stringify(currentUser)); }, [currentUser]);
@@ -102,9 +143,9 @@ function App() {
   const [isEmitindoNfe, setIsEmitindoNfe] = useState(false);
   const [isNfeListModalOpen, setIsNfeListModalOpen] = useState(false);
 
-  // CNPJ Modal States
-  const [isCnpjModalOpen, setIsCnpjModalOpen] = useState(false);
-  const [tempCnpj, setTempCnpj] = useState('');
+  // Profile Edit Modal States
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [tempProfile, setTempProfile] = useState({ name: '', role: '', company: '', companyCnpj: '' });
 
   // Dynamic Chart Data based on movements from Jan to Dec
   const getChartData = () => {
@@ -147,6 +188,20 @@ function App() {
   };
   
   const funnelData = getFunnelData();
+  
+  const getSalesBySalesperson = () => {
+    const dataMap = {};
+    deals.filter(d => d.status === 'Ganho').forEach(d => {
+      const seller = d.salesperson || 'Desconhecido';
+      if (!dataMap[seller]) dataMap[seller] = 0;
+      dataMap[seller] += d.value;
+    });
+    return Object.keys(dataMap).map(seller => ({
+      name: seller,
+      vendas: dataMap[seller]
+    })).sort((a, b) => b.vendas - a.vendas);
+  };
+  const salesBySalespersonData = getSalesBySalesperson();
   const totalCrmValue = deals.filter(d => d.status !== 'Ganho' && d.status !== 'Perdido').reduce((acc, d) => acc + d.value, 0);
   const totalWonValue = deals.filter(d => d.status === 'Ganho').reduce((acc, d) => acc + d.value, 0);
   const totalWonCount = deals.filter(d => d.status === 'Ganho').length;
@@ -175,7 +230,8 @@ function App() {
       id: Date.now().toString(),
       quantity: Number(newItem.quantity),
       price: Number(newItem.price),
-      lastMovementDate: new Date().toISOString()
+      lastMovementDate: new Date().toISOString(),
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
     };
     await setDoc(doc(db, 'items', item.id), item);
     
@@ -187,16 +243,37 @@ function App() {
       quantity: item.quantity,
       date: item.lastMovementDate,
       user: currentUser.name,
-      reason: 'Cadastro Inicial'
+      reason: 'Cadastro Inicial',
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
     };
     await setDoc(doc(db, 'movements', movement.id), movement);
 
     setIsModalOpen(false);
     setNewItem({ name: '', sku: '', quantity: 0, location: '', price: 0 });
+
   };
 
   const handleDelete = async (id) => {
     await deleteDoc(doc(db, 'items', id));
+
+  };
+
+  const handleAddCompany = async (e) => {
+    e.preventDefault();
+    if (!newCompany.name || !newCompany.cnpj) return;
+    const company = {
+      id: Date.now().toString(),
+      name: newCompany.name,
+      cnpj: newCompany.cnpj
+    };
+    await setDoc(doc(db, 'companies', company.id), company);
+    setNewCompany({ name: '', cnpj: '' });
+
+  };
+
+  const handleDeleteCompany = async (id) => {
+    await deleteDoc(doc(db, 'companies', id));
+
   };
 
   const handleUpdateQuantity = async (id, delta, type = delta > 0 ? 'ENTRADA' : 'SAIDA', reason = delta > 0 ? 'Entrada manual' : 'Saída manual') => {
@@ -216,25 +293,89 @@ function App() {
       quantity: Math.abs(delta),
       date: date,
       user: currentUser.name,
-      reason: reason
+      reason: reason,
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
     };
     await setDoc(doc(db, 'movements', movement.id), movement);
   };
 
-  const handleAdjustSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!adjustItem) return;
+    if (!editItem) return;
     
-    // SAIDA e PERDA devem subtrair do estoque atual
-    const isSubtraction = adjustData.type === 'SAIDA' || adjustData.type === 'PERDA';
-    const delta = isSubtraction ? -Math.abs(adjustData.quantity) : Number(adjustData.quantity);
+    // Check if quantity changed to log a movement
+    const delta = Number(editFormData.quantity) - editItem.quantity;
+    if (delta !== 0) {
+       const type = delta > 0 ? 'ENTRADA' : 'SAIDA';
+       handleUpdateQuantity(editItem.id, delta, type, 'Edição Manual');
+    }
+
+    const updatedItem = {
+      ...editItem,
+      ...editFormData,
+      price: Number(editFormData.price),
+      quantity: Number(editFormData.quantity),
+      deliveryDays: Number(editFormData.deliveryDays || 3)
+    };
     
-    // Passar o tipo real para a função para logar no histórico corretamente
-    handleUpdateQuantity(adjustItem.id, delta, adjustData.type, adjustData.reason);
+    await setDoc(doc(db, 'items', editItem.id), updatedItem);
     
-    setIsAdjustModalOpen(false);
-    setAdjustItem(null);
-    setAdjustData({ reason: '', type: 'AJUSTE', quantity: 0 });
+    setIsEditModalOpen(false);
+    setEditItem(null);
+    alert('Produto editado com sucesso!');
+  };
+
+  const handleAddOfferSubmit = async (e) => {
+    e.preventDefault();
+    if (!offerFormData.itemId || offerFormData.offerPrice <= 0 || offerFormData.hours <= 0) return;
+    
+    const targetItem = items.find(i => i.id === offerFormData.itemId);
+    if (!targetItem) return;
+
+    const offerEndsAt = new Date(Date.now() + offerFormData.hours * 3600 * 1000).toISOString();
+    
+    const updatedItem = {
+      ...targetItem,
+      price: Number(offerFormData.offerPrice),
+      originalPrice: targetItem.originalPrice || targetItem.price,
+      isOffer: true,
+      offerEndsAt: offerEndsAt
+    };
+    
+    await setDoc(doc(db, 'items', targetItem.id), updatedItem);
+    setIsOfferModalOpen(false);
+    setOfferFormData({ itemId: '', offerPrice: 0, hours: 24 });
+    alert('Oferta relâmpago adicionada com sucesso!');
+  };
+
+  const handleSendBirthday = async (customer) => {
+    // Gerar Cupom
+    const couponCode = `NIVER${customer.cpf.replace(/\D/g, '').slice(0, 4)}${Math.floor(Math.random() * 100)}`;
+    const newCoup = {
+      id: Date.now().toString(),
+      code: couponCode,
+      discount: Number(birthdayDiscount),
+      expireDays: 7, // expira em 7 dias
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00',
+      usageLimit: 1,
+      usedCount: 0,
+      targetCpf: customer.cpf
+    };
+    await setDoc(doc(db, 'coupons', newCoup.id), newCoup);
+
+    // Substituir template
+    const msg = birthdayMessageTemplate
+      .replace('{nome}', customer.name.split(' ')[0])
+      .replace('{cupom}', couponCode)
+      .replace('{desconto}', birthdayDiscount);
+
+    // Abrir WhatsApp
+    const phone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
+    if (phone) {
+      window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else {
+      alert('Cliente sem telefone cadastrado.');
+    }
   };
 
   const handleCpfChange = (e) => {
@@ -247,6 +388,31 @@ function App() {
     value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
     
     setLoginData({...loginData, cpf: value});
+  };
+
+  const handleAddCoupon = async (e) => {
+    e.preventDefault();
+    if (!newCoupon.code) return;
+    
+    try {
+      const expireDate = new Date();
+      expireDate.setDate(expireDate.getDate() + Number(newCoupon.expireDays));
+      
+      await addDoc(collection(db, 'coupons'), {
+        code: newCoupon.code.toUpperCase(),
+        discount: Number(newCoupon.discount),
+        expireDate: expireDate.toISOString(),
+        usageLimit: newCoupon.usageLimit ? Number(newCoupon.usageLimit) : null,
+        usedCount: 0,
+        companyCnpj: currentUser.companyCnpj
+      });
+      setIsCouponModalOpen(false);
+      setNewCoupon({ code: '', discount: 10, expireDays: 30, usageLimit: '' });
+      alert('Cupom cadastrado com sucesso!');
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao cadastrar cupom');
+    }
   };
 
   const handleCnpjChange = (e) => {
@@ -262,16 +428,52 @@ function App() {
     setCurrentUser({...currentUser, cnpj: value});
   };
 
-  const handleLogin = (e) => {
+  const handlePhoneChangeAdmin = (e) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 11) value = value.slice(0, 11);
+    value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+    value = value.replace(/(\d)(\d{4})$/, '$1-$2');
+    setLoginData({...loginData, phone: value});
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
     if (!cpfRegex.test(loginData.cpf)) {
       alert("Por favor, insira um CPF válido no formato 000.000.000-00");
       return;
     }
-    
-    if (loginData.name && loginData.cpf && loginData.company) {
-      setCurrentUser({...loginData, role: 'Administrador', cnpj: '00.000.000/0001-00'});
+
+    const cpfClean = loginData.cpf.replace(/\D/g, '');
+
+    if (loginMode === 'login') {
+      const userRef = doc(db, 'users', cpfClean);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        setCurrentUser({...userData, companyCnpj: userData.companyCnpj || '00.000.000/0001-00'});
+      } else {
+        alert("Usuário não encontrado. Por favor, faça o cadastro.");
+      }
+    } else {
+      if (loginData.role === 'Vendedor' && !loginData.phone) {
+        alert("O telefone é obrigatório para vendedores.");
+        return;
+      }
+      
+      if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj) {
+        const userDoc = {
+          name: loginData.name,
+          cpf: loginData.cpf,
+          company: loginData.company,
+          companyCnpj: loginData.companyCnpj,
+          role: loginData.role,
+          phone: loginData.phone || '',
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, 'users', cpfClean), userDoc);
+        setCurrentUser({...userDoc});
+      }
     }
   };
 
@@ -376,14 +578,67 @@ function App() {
       id: Date.now().toString(),
       status: 'Prospecção',
       date: new Date().toISOString(),
-      salesperson: currentUser.name
+      salesperson: currentUser.name,
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00',
+      tracking: [{ msg: 'Oportunidade criada', date: new Date().toISOString() }]
     };
     await setDoc(doc(db, 'deals', deal.id), deal);
     setIsDealModalOpen(false);
     setNewDeal({ client: '', title: '', value: 0, products: [] });
   };
 
-  const advanceDealStatus = (dealId, currentStatus) => {
+  const handleAddTrackingMessage = async (e) => {
+    e.preventDefault();
+    if (!trackingModal) return;
+
+    try {
+      const dealRef = doc(db, 'deals', trackingModal.dealId);
+      const deal = deals.find(d => d.id === trackingModal.dealId);
+      const currentTracking = deal?.tracking || [];
+      const updates = {
+        tracking: [...currentTracking, {
+          msg: trackingModal.msg || trackingModal.status,
+          date: new Date().toISOString()
+        }]
+      };
+      
+      if (trackingModal.status) {
+        updates.shippingStatus = trackingModal.status;
+      }
+
+      await updateDoc(dealRef, updates);
+      setTrackingModal(null);
+      alert('Rastreio atualizado com sucesso!');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao atualizar rastreio.');
+    }
+  };
+
+  const handleSendInternalMessage = async (e) => {
+    e.preventDefault();
+    if (!internalChat || !internalChat.msg.trim()) return;
+
+    try {
+      const dealRef = doc(db, 'deals', internalChat.dealId);
+      const deal = deals.find(d => d.id === internalChat.dealId);
+      const currentMessages = deal?.messages || [];
+      await updateDoc(dealRef, {
+        messages: [...currentMessages, {
+          sender: currentUser.name,
+          role: 'admin',
+          text: internalChat.msg,
+          date: new Date().toISOString()
+        }]
+      });
+      setInternalChat(prev => ({ ...prev, msg: '' }));
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao enviar mensagem.');
+    }
+  };
+
+  const advanceDealStatus = async (dealId, currentStatus) => {
     const statusFlow = ['Prospecção', 'Qualificação', 'Proposta', 'Negociação', 'Ganho', 'Perdido'];
     const currentIndex = statusFlow.indexOf(currentStatus);
     if (currentIndex < statusFlow.length - 1 && currentStatus !== 'Ganho' && currentStatus !== 'Perdido') {
@@ -448,119 +703,57 @@ function App() {
 
   const handleOpenNfeModal = (deal) => {
     setSelectedNfeDeal(deal);
+    
+    // Auto-fill from customer profile if available
+    let destinatario = { cnpjDestinatario: '', cepDestinatario: '', enderecoDestinatario: '', cidadeDestinatario: '' };
+    if (deal.customerCpf) {
+      const customer = customers.find(c => c.cpf === deal.customerCpf);
+      if (customer) {
+        destinatario.cnpjDestinatario = customer.cpf;
+        destinatario.cepDestinatario = customer.zip || '';
+        destinatario.enderecoDestinatario = [customer.address, customer.neighborhood].filter(Boolean).join(', ');
+        destinatario.cidadeDestinatario = [customer.city, customer.state].filter(Boolean).join(' / ');
+      }
+    }
+    
+    setNfeFormData(prev => ({
+      ...prev,
+      ...destinatario
+    }));
+    
     setIsNfeModalOpen(true);
   };
 
-  const handleEmitNfe = (e) => {
+  const handleEmitNfe = async (e) => {
     e.preventDefault();
     setIsEmitindoNfe(true);
+
+    const cleanCnpj = currentUser.cnpj ? currentUser.cnpj.replace(/\D/g, '').padStart(14, '0') : '00000000000000';
+    const chaveAcesso = '352609' + cleanCnpj + '550010000001421' + Math.floor(100000000 + Math.random() * 900000000);
+    
+    const updatedDeal = { ...selectedNfeDeal, nfeEmitted: true, chaveAcesso: chaveAcesso, nfeData: nfeFormData, nfeNotification: true };
+    await setDoc(doc(db, 'deals', selectedNfeDeal.id), updatedDeal);
+
     // Simular tempo de resposta da SEFAZ
     setTimeout(() => {
-      setDeals(deals.map(d => d.id === selectedNfeDeal.id ? { ...d, nfeEmitted: true } : d));
       setIsEmitindoNfe(false);
       setIsNfeModalOpen(false);
       
       // Geração do "PDF" em nova aba
       const printWindow = window.open('', '_blank');
-      const emitDate = new Date().toLocaleString('pt-BR');
-      const invoiceHtml = `
-        <html>
-          <head>
-            <title>DANFE - ${selectedNfeDeal.client}</title>
-            <style>
-              body { font-family: 'Arial', sans-serif; margin: 0; padding: 20px; color: #000; font-size: 11px; }
-              .danfe-container { border: 1px solid #000; width: 100%; max-width: 800px; margin: 0 auto; }
-              .section-title { font-weight: bold; font-size: 10px; margin-top: 5px; margin-bottom: 2px; text-transform: uppercase; }
-              .box { border: 1px solid #000; padding: 2px 4px; box-sizing: border-box; }
-              .box-label { font-size: 8px; color: #333; display: block; margin-bottom: 2px; text-transform: uppercase; }
-              .box-value { font-size: 11px; font-weight: bold; }
-              .header-grid { display: grid; grid-template-columns: 2fr 1fr 1.5fr; border-bottom: 1px solid #000; }
-              .header-col { border-right: 1px solid #000; padding: 5px; }
-              .header-col:last-child { border-right: none; }
-              .flex-row { display: flex; width: 100%; border-bottom: 1px solid #000; }
-              .flex-col { border-right: 1px solid #000; padding: 2px 4px; flex: 1; }
-              .flex-col:last-child { border-right: none; }
-              table.items-table { width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000; }
-              table.items-table th { border: 1px solid #000; padding: 4px; font-size: 9px; text-align: left; background: #eee; }
-              table.items-table td { border: 1px solid #000; padding: 4px; font-size: 10px; }
-            </style>
-          </head>
-          <body>
-            <div class="danfe-container">
-              <div class="header-grid">
-                <div class="header-col" style="text-align: center;">
-                  <h2 style="margin: 0; font-size: 16px;">${currentUser.company}</h2>
-                  <p style="margin: 2px 0; font-size: 10px;">CNPJ: ${currentUser.cnpj}</p>
-                </div>
-                <div class="header-col" style="text-align: center;">
-                  <h1 style="margin: 0; font-size: 18px;">DANFE</h1>
-                  <p style="margin: 2px 0; font-size: 10px;">Documento Auxiliar da<br/>Nota Fiscal Eletrônica</p>
-                </div>
-                <div class="header-col">
-                  <div class="box-label">CHAVE DE ACESSO</div>
-                  <div class="box-value" style="font-size: 10px;">${Math.random().toString().slice(2, 12)} ${Math.random().toString().slice(2, 12)} ${Math.random().toString().slice(2, 12)} ${Math.random().toString().slice(2, 12)}</div>
-                </div>
-              </div>
-
-              <div class="section-title">DESTINATÁRIO / REMETENTE</div>
-              <div class="flex-row">
-                <div class="flex-col" style="flex: 2;"><span class="box-label">NOME / RAZÃO SOCIAL</span><span class="box-value">${selectedNfeDeal.client}</span></div>
-                <div class="flex-col" style="flex: 1;"><span class="box-label">CNPJ / CPF</span><span class="box-value">${nfeFormData.cnpjDestinatario || 'Não Informado'}</span></div>
-                <div class="flex-col" style="flex: 1;"><span class="box-label">DATA DA EMISSÃO</span><span class="box-value">${emitDate}</span></div>
-              </div>
-              <div class="flex-row">
-                <div class="flex-col" style="flex: 2;"><span class="box-label">ENDEREÇO</span><span class="box-value">${nfeFormData.enderecoDestinatario || 'Não Informado'}</span></div>
-                <div class="flex-col" style="flex: 1;"><span class="box-label">MUNICÍPIO</span><span class="box-value">${nfeFormData.cidadeDestinatario || 'Não Informado'}</span></div>
-                <div class="flex-col" style="flex: 1;"><span class="box-label">CEP</span><span class="box-value">${nfeFormData.cepDestinatario || 'Não Informado'}</span></div>
-              </div>
-
-              <div class="section-title">DADOS DOS PRODUTOS / SERVIÇOS</div>
-              <table class="items-table">
-                <thead>
-                  <tr>
-                    <th>CÓDIGO</th>
-                    <th>DESCRIÇÃO DO PRODUTO/SERVIÇO</th>
-                    <th>NCM/SH</th>
-                    <th>CFOP</th>
-                    <th>UNID.</th>
-                    <th>QTD.</th>
-                    <th>VLR. UNIT.</th>
-                    <th>VLR. TOTAL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${selectedNfeDeal.products.map(p => `
-                    <tr>
-                      <td>${p.sku}</td>
-                      <td>${p.name}</td>
-                      <td>${nfeFormData.ncm}</td>
-                      <td>${nfeFormData.cfop.split(' ')[0]}</td>
-                      <td>UN</td>
-                      <td>${p.quantity}</td>
-                      <td>${Number(p.price).toFixed(2)}</td>
-                      <td>${(Number(p.quantity) * Number(p.price)).toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-
-              <div class="section-title" style="margin-top: 20px;">CÁLCULO DO IMPOSTO (TOTAL)</div>
-              <div class="flex-row">
-                <div class="flex-col"><span class="box-label">VALOR TOTAL DOS PRODUTOS</span><span class="box-value">R$ ${Number(selectedNfeDeal.value).toFixed(2)}</span></div>
-                <div class="flex-col"><span class="box-label">VALOR TOTAL DA NOTA</span><span class="box-value">R$ ${Number(selectedNfeDeal.value).toFixed(2)}</span></div>
-              </div>
-            </div>
-            <script>
-              window.onload = function() { window.print(); }
-            </script>
-          </body>
-        </html>
-      `;
+      const invoiceHtml = generateDanfeHtml(updatedDeal, currentUser, nfeFormData);
       printWindow.document.write(invoiceHtml);
       printWindow.document.close();
 
       setSelectedNfeDeal(null);
     }, 2000);
+  };
+
+  const handleViewPdf = (deal) => {
+    const printWindow = window.open('', '_blank');
+    const invoiceHtml = generateDanfeHtml(deal, currentUser, deal.nfeData || {});
+    printWindow.document.write(invoiceHtml);
+    printWindow.document.close();
   };
 
   const confirmAddToCart = () => {
@@ -582,17 +775,18 @@ function App() {
 
     const newDealId = Date.now().toString();
     const dealTotal = cart.reduce((a,c) => a + (c.price * c.cartQuantity), 0);
-    const newDealObj = {
+    const deal = {
       id: newDealId,
       client: 'Cliente Web (' + checkoutMethod + ')',
       title: 'Venda via Carrinho',
       value: dealTotal,
       status: 'Ganho',
       products: cart.map(c => ({ sku: c.sku, name: c.name, quantity: c.cartQuantity, price: c.price })),
-      salesperson: currentUser.name
+      salesperson: currentUser.name,
+      companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
     };
     
-    setDeals([newDealObj, ...deals]);
+    setDeals([deal, ...deals]);
     
     let updatedItems = [...items];
     let newMovements = [...movements];
@@ -611,7 +805,8 @@ function App() {
         quantity: c.cartQuantity,
         date: date,
         user: currentUser.name,
-        reason: `Venda Carrinho (ID: ${newDealId})`
+        reason: `Venda (ID: ${deal.id})`,
+        companyCnpj: currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00'
       });
     });
     
@@ -628,23 +823,46 @@ function App() {
       <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', minHeight: '100vh', display: 'flex' }}>
         <div className="modal-content glass-panel" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src={logo} alt="Logo Controle-se" style={{ height: '60px', width: '60px', objectFit: 'cover', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
-            <h2 style={{ marginTop: '1rem', color: 'var(--text-primary)' }}>Bem-vindo ao Controle-se</h2>
+            <img src={logo} alt="Logo GESTE" style={{ height: '60px', width: '60px', objectFit: 'cover', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+            <h2 style={{ marginTop: '1rem', color: 'var(--text-primary)' }}>Bem-vindo ao GESTE</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>Faça login para acessar o sistema de estoque.</p>
           </div>
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+            <button 
+              type="button" 
+              className={loginMode === 'login' ? 'btn-primary' : 'btn-secondary'} 
+              style={{ flex: 1, padding: '0.5rem' }} 
+              onClick={() => setLoginMode('login')}
+            >
+              Entrar
+            </button>
+            <button 
+              type="button" 
+              className={loginMode === 'register' ? 'btn-primary' : 'btn-secondary'} 
+              style={{ flex: 1, padding: '0.5rem' }} 
+              onClick={() => setLoginMode('register')}
+            >
+              Cadastrar
+            </button>
+          </div>
+
           <form onSubmit={handleLogin}>
+            {loginMode === 'register' && (
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label>Nome Completo</label>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder="Ex: João Silva"
+                  value={loginData.name}
+                  onChange={e => setLoginData({...loginData, name: e.target.value})}
+                />
+              </div>
+            )}
+            
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label>Nome Completo</label>
-              <input 
-                type="text" 
-                required 
-                placeholder="Ex: João Silva"
-                value={loginData.name}
-                onChange={e => setLoginData({...loginData, name: e.target.value})}
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label>CPF (Servirá como seu ID)</label>
+              <label>CPF</label>
               <input 
                 type="text" 
                 required 
@@ -654,30 +872,66 @@ function App() {
                 maxLength="14"
               />
             </div>
-            <div className="form-group" style={{ marginBottom: '2rem' }}>
-              <label>Nome da Empresa</label>
-              <input 
-                type="text" 
-                required 
-                placeholder="Ex: Minha Empresa Ltda"
-                value={loginData.company}
-                onChange={e => setLoginData({...loginData, company: e.target.value})}
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: '2rem' }}>
-              <label>Cargo (Perfil de Acesso)</label>
-              <select 
-                value={loginData.role}
-                onChange={e => setLoginData({...loginData, role: e.target.value})}
-                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
-              >
-                <option value="Vendedor">Vendedor</option>
-                <option value="Gestor">Gestor</option>
-                <option value="Administrador">Administrador</option>
-              </select>
-            </div>
+
+            {loginMode === 'register' && (
+              <>
+                <div className="form-group" style={{ marginBottom: '2rem' }}>
+                  <label>Nome da Empresa</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Ex: Minha Empresa Ltda"
+                    value={loginData.company}
+                    onChange={e => setLoginData({...loginData, company: e.target.value})}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '2rem' }}>
+                  <label>CNPJ da Empresa</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="00.000.000/0000-00"
+                    value={loginData.companyCnpj}
+                    maxLength={18}
+                    onChange={e => {
+                      let v = e.target.value.replace(/\D/g, '');
+                      if (v.length > 14) v = v.slice(0, 14);
+                      v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+                      v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                      v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                      v = v.replace(/(\d{4})(\d)/, '$1-$2');
+                      setLoginData({...loginData, companyCnpj: v});
+                    }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '2rem' }}>
+                  <label>Cargo (Perfil de Acesso)</label>
+                  <select 
+                    value={loginData.role}
+                    onChange={e => setLoginData({...loginData, role: e.target.value})}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                  >
+                    <option value="Vendedor">Vendedor</option>
+                    <option value="Gestor">Gestor</option>
+                    <option value="Administrador">Administrador</option>
+                  </select>
+                </div>
+                {loginData.role === 'Vendedor' && (
+                  <div className="form-group" style={{ marginBottom: '2rem' }}>
+                    <label>Seu WhatsApp</label>
+                    <input 
+                      type="text" 
+                      required 
+                      placeholder="(00) 00000-0000"
+                      value={loginData.phone}
+                      onChange={handlePhoneChangeAdmin}
+                    />
+                  </div>
+                )}
+              </>
+            )}
             <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
-              Entrar no Sistema
+              {loginMode === 'login' ? 'Entrar no Sistema' : 'Criar Conta'}
             </button>
           </form>
         </div>
@@ -690,8 +944,8 @@ function App() {
       {/* Header */}
       <header className="glass-panel" style={{ padding: '1rem 2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <img src={logo} alt="Logo Controle-se" style={{ height: '45px', width: '45px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
-          <h1 style={{ margin: 0, fontSize: '1.75rem' }}>Controle-se</h1>
+          <img src={logo} alt="Logo GESTE" style={{ height: '45px', width: '45px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+          <h1 style={{ margin: 0, fontSize: '1.75rem' }}>GESTE</h1>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginLeft: 'auto' }}>
@@ -711,13 +965,18 @@ function App() {
           {/* User Profile Header */}
           <div className="user-profile-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', paddingLeft: '1.5rem', borderLeft: '1px solid var(--glass-border)' }}>
             <div style={{ textAlign: 'right', cursor: 'pointer' }} onClick={() => {
-              setTempCnpj(currentUser.cnpj || '');
-              setIsCnpjModalOpen(true);
-            }} title="Clique para editar o CNPJ da Empresa">
+              setTempProfile({
+                name: currentUser.name || '',
+                role: currentUser.role || 'Vendedor',
+                company: currentUser.company || '',
+                companyCnpj: currentUser.companyCnpj || currentUser.cnpj || ''
+              });
+              setIsProfileModalOpen(true);
+            }} title="Clique para editar o seu perfil">
               <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                 {currentUser.name} <span style={{fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--primary-color)'}}>({currentUser.role || 'Vendedor'})</span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{currentUser.company} | CNPJ: {currentUser.cnpj}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{currentUser.company} | CNPJ: {currentUser.companyCnpj || currentUser.cnpj}</div>
             </div>
             
             <div 
@@ -814,13 +1073,75 @@ function App() {
           <button className={activeTab === 'crm' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('crm')} style={activeTab !== 'crm' ? { color: 'var(--text-primary)' } : {}}>
             CRM & Vendas
           </button>
+          <button className={activeTab === 'pedidos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('pedidos')} style={activeTab !== 'pedidos' ? { color: 'var(--text-primary)', position: 'relative' } : { position: 'relative' }}>
+            Pedidos Solicitados
+            {hasUnreadAdmin ? (
+              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--danger)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '50%' }}>
+                !
+              </span>
+            ) : deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido').length > 0 ? (
+              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--danger)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '50%' }}>
+                {deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido').length}
+              </span>
+            ) : null}
+          </button>
+          <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
+            Lojas (Empresas)
+          </button>
         </nav>
+
+        {activeTab === 'pedidos' && (
+          <>
+            <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Pedidos Solicitados (Vitrine)</h2>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+              {deals.filter(d => d.source === 'vitrine').length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Nenhum pedido da vitrine no momento.</div>
+              ) : (
+                deals.filter(d => d.source === 'vitrine').sort((a,b) => new Date(b.date) - new Date(a.date)).map(deal => (
+                  <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', borderLeft: '4px solid var(--primary-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleString()}</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
+                    </div>
+                    <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-color)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
+                    
+                    <div style={{ marginBottom: '1rem' }}>
+                      <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="btn-primary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
+                        Abrir Atendimento (Chat)
+                        {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
+                          <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
+                        )}
+                      </button>
+                      <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setTrackingModal({ dealId: deal.id, msg: '' })}>
+                        Atualizar Rastreio
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
 
         {activeTab === 'produtos' && (
           <>
             <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="btn-secondary" onClick={() => setIsOfferModalOpen(true)} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                  ⚡ Adicionar Oferta
+                </button>
+                <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: 'var(--primary-color)' }}>
+                  🎟️ Adicionar Cupom
+                </button>
                 <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
                   + Adicionar Produto
                 </button>
@@ -831,13 +1152,18 @@ function App() {
                 const status = getStatusDetails(item.quantity);
                 return (
                   <div key={item.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ width: '100%', height: '150px', background: 'var(--background-color)', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', color: 'var(--text-secondary)' }}>
-                      📦
-                    </div>
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '150px', objectFit: 'contain', background: '#fff', borderRadius: '0.5rem' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '150px', background: 'var(--background-color)', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', color: 'var(--text-secondary)' }}>
+                        📦
+                      </div>
+                    )}
                     <div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>SKU: {item.sku}</div>
                       <h3 style={{ margin: '0.25rem 0', color: 'var(--text-primary)', fontSize: '1.1rem' }}>{item.name}</h3>
                       <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>R$ {Number(item.price).toFixed(2)}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{item.sold || 0} vendidos</div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
                       <div>
@@ -850,9 +1176,15 @@ function App() {
                       <button 
                         className="btn-secondary" 
                         style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem' }}
-                        onClick={() => { setAdjustItem(item); setIsAdjustModalOpen(true); }}
+                        onClick={() => { 
+                          setEditItem(item); 
+                          setEditFormData({
+                            name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3
+                          });
+                          setIsEditModalOpen(true); 
+                        }}
                       >
-                        ⚙️ Ajustar
+                        ✏️ Editar
                       </button>
                     </div>
                   </div>
@@ -886,6 +1218,9 @@ function App() {
             <button className="btn-secondary" onClick={() => setIsChartModalOpen(true)} style={{ color: 'var(--text-primary)' }}>
               📊 Ver Gráfico
             </button>
+            <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: 'var(--primary-color)' }}>
+              🎟️ Adicionar Cupom
+            </button>
             <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
               + Adicionar Produto
             </button>
@@ -909,8 +1244,26 @@ function App() {
               {filteredItems.map(item => (
                 <tr key={item.id}>
                   <td>{item.sku}</td>
-                  <td>{item.name}</td>
-                  <td>R$ {Number(item.price).toFixed(2)}</td>
+                  <td>
+                    {item.name}
+                    {item.isOffer && (
+                      <span style={{ marginLeft: '0.5rem', fontSize: '0.65rem', background: 'var(--danger)', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 'bold' }}>
+                        OFERTA
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {item.isOffer ? (
+                      <div>
+                        <span style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', fontSize: '0.75rem', marginRight: '0.5rem' }}>
+                          R$ {Number(item.originalPrice).toFixed(2)}
+                        </span>
+                        <strong style={{ color: 'var(--danger)' }}>R$ {Number(item.price).toFixed(2)}</strong>
+                      </div>
+                    ) : (
+                      <span>R$ {Number(item.price).toFixed(2)}</span>
+                    )}
+                  </td>
                   <td>{item.location}</td>
                   <td>{item.quantity}</td>
                   <td>
@@ -926,7 +1279,13 @@ function App() {
                       <button className="btn-icon" onClick={() => handleUpdateQuantity(item.id, -1)} title="Saída (Remover)" disabled={item.quantity <= 0}>
                         -
                       </button>
-                      <button className="btn-icon" onClick={() => { setAdjustItem(item); setIsAdjustModalOpen(true); }} title="Ajuste Manual" style={{ fontSize: '1rem' }}>
+                      <button className="btn-icon" onClick={() => { 
+                        setEditItem(item); 
+                        setEditFormData({
+                          name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3
+                        });
+                        setIsEditModalOpen(true); 
+                      }} title="Ajuste Geral" style={{ fontSize: '1rem' }}>
                         ⚙️
                       </button>
                       <button className="btn-danger" onClick={() => handleDelete(item.id)}>
@@ -1212,10 +1571,7 @@ function App() {
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button className="btn-secondary" onClick={() => setIsNfeListModalOpen(true)} style={{ color: 'var(--text-primary)' }}>
-                  🧾 Minhas Notas Fiscais
-                </button>
-                <button className="btn-primary" onClick={() => setIsDealModalOpen(true)}>
-                  + Nova Oportunidade
+                  Minhas Notas Fiscais
                 </button>
               </div>
             </div>
@@ -1359,33 +1715,39 @@ function App() {
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h4 style={{ margin: 0 }}>Clientes aniversariantes</h4>
-                            <span style={{ fontSize: '0.7rem', background: '#e2e8f0', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>Fixo: Do dia atual</span>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.7rem', background: '#e2e8f0', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>Do dia atual</span>
+                              <button onClick={() => setIsBirthdayMessageModalOpen(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}>⚙️ Configurar</button>
+                            </div>
                           </div>
                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                            <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ fontSize: '1.5rem', color: '#60a5fa' }}>👤</div>
-                                <div>
-                                  <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Maria Fernanda Ferreira</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>(31) 95555-5555</div>
+                            {customers.filter(c => {
+                              if (!c.birthday) return false;
+                              const bDate = new Date(c.birthday);
+                              const today = new Date();
+                              return bDate.getDate() === today.getDate() && bDate.getMonth() === today.getMonth();
+                            }).map((c, idx) => (
+                              <li key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <div style={{ fontSize: '1.5rem', color: '#60a5fa' }}>👤</div>
+                                  <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{c.name}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{c.phone}</div>
+                                  </div>
                                 </div>
-                              </div>
-                              <button onClick={() => window.open('https://wa.me/5531955555555', '_blank')} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                🟢 ENVIAR &gt;
-                              </button>
-                            </li>
-                            <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ fontSize: '1.5rem', color: '#60a5fa' }}>👤</div>
-                                <div>
-                                  <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Josélia Macedo</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>(31) 95555-5555</div>
-                                </div>
-                              </div>
-                              <button onClick={() => window.open('https://wa.me/5531955555555', '_blank')} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                🟢 ENVIAR &gt;
-                              </button>
-                            </li>
+                                <button onClick={() => handleSendBirthday(c)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  🟢 ENVIAR &gt;
+                                </button>
+                              </li>
+                            ))}
+                            {customers.filter(c => {
+                              if (!c.birthday) return false;
+                              const bDate = new Date(c.birthday);
+                              const today = new Date();
+                              return bDate.getDate() === today.getDate() && bDate.getMonth() === today.getMonth();
+                            }).length === 0 && (
+                              <li style={{ padding: '1rem 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Nenhum aniversariante hoje.</li>
+                            )}
                           </ul>
                         </div>
                       </div>
@@ -1431,23 +1793,43 @@ function App() {
                     </div>
                   </div>
 
-              {/* Metric Cards */}
-              <div style={{ flex: '1 1 300px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
-                  <span className="stat-title">Valor em Aberto (Funil)</span>
-                  <span className="stat-value" style={{ color: 'var(--primary-color)' }}>R$ {totalCrmValue.toFixed(2)}</span>
+              {/* Metric Cards & Vendas por Vendedor */}
+              <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
+                    <span className="stat-title">Valor em Aberto (Funil)</span>
+                    <span className="stat-value" style={{ color: 'var(--primary-color)' }}>R$ {totalCrmValue.toFixed(2)}</span>
+                  </div>
+                  <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
+                    <span className="stat-title">Vendas Ganhas</span>
+                    <span className="stat-value" style={{ color: 'var(--success)' }}>R$ {totalWonValue.toFixed(2)}</span>
+                  </div>
+                  <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
+                    <span className="stat-title">Ticket Médio</span>
+                    <span className="stat-value">R$ {avgTicket.toFixed(2)}</span>
+                  </div>
+                  <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
+                    <span className="stat-title">Taxa de Conversão</span>
+                    <span className="stat-value">{winRate}%</span>
+                  </div>
                 </div>
-                <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
-                  <span className="stat-title">Vendas Ganhas</span>
-                  <span className="stat-value" style={{ color: 'var(--success)' }}>R$ {totalWonValue.toFixed(2)}</span>
-                </div>
-                <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
-                  <span className="stat-title">Ticket Médio</span>
-                  <span className="stat-value">R$ {avgTicket.toFixed(2)}</span>
-                </div>
-                <div className="stat-card glass-panel" style={{ borderRadius: '1rem', justifyContent: 'center' }}>
-                  <span className="stat-title">Taxa de Conversão</span>
-                  <span className="stat-value">{winRate}%</span>
+
+                {/* Vendas por Vendedor Chart */}
+                <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '300px' }}>
+                  <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-primary)' }}>Vendas por Vendedor (Ganhas)</h3>
+                  <div style={{ flex: 1, width: '100%', minHeight: '200px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={salesBySalespersonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} style={{ fontSize: '0.8rem', fontWeight: 'bold' }} />
+                        <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val/1000}k`} style={{ fontSize: '0.8rem' }} />
+                        <Tooltip formatter={(value) => [`R$ ${value.toFixed(2)}`, 'Vendas']} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                        <Bar dataKey="vendas" fill="var(--primary-color)" radius={[4, 4, 0, 0]} barSize={40}>
+                          <LabelList dataKey="vendas" position="top" formatter={(val) => `R$${val}`} style={{ fontSize: '0.75rem', fill: 'var(--text-secondary)' }} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
               </div>
@@ -1491,6 +1873,17 @@ function App() {
                         <span className="card-value" style={{ fontSize: '1rem', color: status === 'Ganho' ? 'var(--success)' : status === 'Perdido' ? 'var(--danger)' : 'var(--primary-hover)' }}>
                           R$ {Number(deal.value).toFixed(2)}
                         </span>
+                        
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            className="btn-secondary" 
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} 
+                            onClick={(e) => { e.stopPropagation(); setTrackingModal({ dealId: deal.id, msg: '' }); }}
+                            title="Atualizar Rastreamento"
+                          >
+                            📍 Rastreio
+                          </button>
+                        </div>
                       </div>
                       
                       {status !== 'Ganho' && status !== 'Perdido' && (
@@ -1530,6 +1923,79 @@ function App() {
         )}
       </>
     )}
+
+    {activeTab === 'lojas' && (
+      <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+        <h2 style={{ color: 'var(--text-primary)', marginBottom: '1.5rem' }}>Gerenciar Lojas (Empresas)</h2>
+        
+        <form onSubmit={handleAddCompany} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '1rem', marginBottom: '2rem', alignItems: 'end' }}>
+          <div className="form-group">
+            <label>Nome da Loja/Empresa</label>
+            <input 
+              type="text" 
+              required
+              placeholder="Ex: Minha Loja LTDA"
+              value={newCompany.name}
+              onChange={e => setNewCompany({...newCompany, name: e.target.value})}
+            />
+          </div>
+          <div className="form-group">
+            <label>CNPJ</label>
+            <input 
+              type="text" 
+              required
+              placeholder="00.000.000/0001-00"
+              value={newCompany.cnpj}
+              maxLength={18}
+              onChange={e => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v.length > 14) v = v.slice(0, 14);
+                v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+                v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                v = v.replace(/(\d{4})(\d)/, '$1-$2');
+                setNewCompany({...newCompany, cnpj: v});
+              }}
+            />
+          </div>
+          <button type="submit" className="btn-primary" style={{ padding: '0.8rem 1.5rem' }}>Adicionar</button>
+        </form>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nome da Loja</th>
+                <th>CNPJ</th>
+                <th style={{ width: '80px', textAlign: 'center' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {companies.map(comp => (
+                <tr key={comp.id}>
+                  <td>{comp.name}</td>
+                  <td>{comp.cnpj}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button 
+                      className="btn-secondary"
+                      style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '0.25rem 0.5rem' }}
+                      onClick={() => handleDeleteCompany(comp.id)}
+                    >
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {companies.length === 0 && (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhuma loja cadastrada ainda.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
       </main>
 
       {/* Add Modal */}
@@ -1560,6 +2026,25 @@ function App() {
                 />
               </div>
               <div className="form-group">
+                <label>Categoria</label>
+                <select 
+                  value={newItem.category}
+                  onChange={e => setNewItem({...newItem, category: e.target.value})}
+                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                >
+                  <option value="Tecnologia">Tecnologia</option>
+                  <option value="Casa e Móveis">Casa e Móveis</option>
+                  <option value="Eletrodomésticos">Eletrodomésticos</option>
+                  <option value="Esportes e Fitness">Esportes e Fitness</option>
+                  <option value="Ferramentas">Ferramentas</option>
+                  <option value="Supermercado">Supermercado</option>
+                  <option value="Veículos">Veículos</option>
+                  <option value="Construção">Construção</option>
+                  <option value="Indústria e Comércio">Indústria e Comércio</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Quantidade</label>
                 <input 
                   type="number" 
@@ -1580,6 +2065,47 @@ function App() {
                   onChange={e => setNewItem({...newItem, price: e.target.value})}
                 />
               </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="freeShipping"
+                  checked={newItem.freeShipping}
+                  onChange={e => setNewItem({...newItem, freeShipping: e.target.checked})}
+                  style={{ width: 'auto' }}
+                />
+                <label htmlFor="freeShipping" style={{ margin: 0 }}>Oferecer Frete Grátis</label>
+              </div>
+              <div className="form-group">
+                <label>Fotos do Produto (Selecione 1 ou mais)</label>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {newItem.imageUrls && newItem.imageUrls.map((url, idx) => (
+                    <img key={idx} src={url} alt={`Preview ${idx}`} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                  ))}
+                  {newItem.imageUrl && (!newItem.imageUrls || newItem.imageUrls.length === 0) && (
+                    <img src={newItem.imageUrl} alt="Preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                  )}
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      const urls = [];
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          urls.push(reader.result);
+                          if(urls.length === files.length) {
+                            setNewItem({...newItem, imageUrls: urls, imageUrl: urls[0]});
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
               <div className="form-group">
                 <label>Localização (Setor/Corredor)</label>
                 <input 
@@ -1587,6 +2113,16 @@ function App() {
                   required 
                   value={newItem.location}
                   onChange={e => setNewItem({...newItem, location: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label>Prazo de Entrega (dias)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  required 
+                  value={newItem.deliveryDays}
+                  onChange={e => setNewItem({...newItem, deliveryDays: e.target.value})}
                 />
               </div>
               <div className="form-actions">
@@ -1627,51 +2163,145 @@ function App() {
         </div>
       )}
 
-      {/* Adjust Modal */}
-      {isAdjustModalOpen && adjustItem && (
+      {/* Coupon Modal */}
+      {isCouponModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel">
+          <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
             <div className="modal-header">
-              <h2>Ajuste de Inventário: {adjustItem.name}</h2>
-              <button className="close-btn" onClick={() => { setIsAdjustModalOpen(false); setAdjustItem(null); }}>×</button>
+              <h2>Novo Cupom</h2>
+              <button className="close-btn" onClick={() => setIsCouponModalOpen(false)}>×</button>
             </div>
-            <form onSubmit={handleAdjustSubmit}>
+            <form onSubmit={handleAddCoupon}>
               <div className="form-group">
-                <label>Tipo de Ajuste</label>
-                <select 
-                  style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0, 0, 0, 0.03)', color: 'var(--text-primary)', outline: 'none' }}
-                  value={adjustData.type} 
-                  onChange={e => setAdjustData({...adjustData, type: e.target.value})}
-                >
-                  <option value="AJUSTE">Ajuste Geral</option>
-                  <option value="ENTRADA">Entrada Extra</option>
-                  <option value="SAIDA">Saída Avulsa</option>
-                  <option value="PERDA">Perda / Roubo / Avaria</option>
-                </select>
+                <label>Código do Cupom</label>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder="Ex: OFERTA10"
+                  value={newCoupon.code}
+                  onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})}
+                />
               </div>
               <div className="form-group">
-                <label>Quantidade a Ajustar</label>
+                <label>Desconto (%)</label>
                 <input 
                   type="number" 
                   required 
                   min="1"
-                  value={adjustData.quantity}
-                  onChange={e => setAdjustData({...adjustData, quantity: e.target.value})}
+                  max="100"
+                  value={newCoupon.discount}
+                  onChange={e => setNewCoupon({...newCoupon, discount: e.target.value})}
                 />
               </div>
               <div className="form-group">
-                <label>Motivo</label>
+                <label>Validade (Dias)</label>
                 <input 
-                  type="text" 
+                  type="number" 
                   required 
-                  placeholder="Ex: Quebra, Furto, Recontagem..."
-                  value={adjustData.reason}
-                  onChange={e => setAdjustData({...adjustData, reason: e.target.value})}
+                  min="1"
+                  value={newCoupon.expireDays}
+                  onChange={e => setNewCoupon({...newCoupon, expireDays: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label>Limite de Usos (Opcional)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  placeholder="Sem limite"
+                  value={newCoupon.usageLimit}
+                  onChange={e => setNewCoupon({...newCoupon, usageLimit: e.target.value})}
                 />
               </div>
               <div className="form-actions">
-                <button type="button" className="btn-secondary" onClick={() => { setIsAdjustModalOpen(false); setAdjustItem(null); }}>Cancelar</button>
-                <button type="submit" className="btn-primary">Registrar Ajuste</button>
+                <button type="button" className="btn-secondary" onClick={() => setIsCouponModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Criar Cupom</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {isEditModalOpen && editItem && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel" style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>Editar Produto: {editItem.name}</h2>
+              <button className="close-btn" onClick={() => { setIsEditModalOpen(false); setEditItem(null); }}>×</button>
+            </div>
+            <form onSubmit={handleEditSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Nome do Produto</label>
+                <input type="text" required value={editFormData.name} onChange={e => setEditFormData({...editFormData, name: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>SKU (Código)</label>
+                <input type="text" required value={editFormData.sku} onChange={e => setEditFormData({...editFormData, sku: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Categoria</label>
+                <input type="text" required value={editFormData.category} onChange={e => setEditFormData({...editFormData, category: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Preço (R$)</label>
+                <input type="number" step="0.01" required min="0" value={editFormData.price} onChange={e => setEditFormData({...editFormData, price: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Quantidade em Estoque</label>
+                <input type="number" required min="0" value={editFormData.quantity} onChange={e => setEditFormData({...editFormData, quantity: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Prazo de Entrega (dias)</label>
+                <input type="number" min="0" required value={editFormData.deliveryDays} onChange={e => setEditFormData({...editFormData, deliveryDays: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Frete Grátis?</label>
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: '0.5rem' }}>
+                  <input type="checkbox" checked={editFormData.freeShipping} onChange={e => setEditFormData({...editFormData, freeShipping: e.target.checked})} style={{ width: '20px', height: '20px' }} />
+                  <span>Sim, oferecer frete grátis</span>
+                </div>
+              </div>
+              
+              <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
+                <button type="button" className="btn-secondary" onClick={() => { setIsEditModalOpen(false); setEditItem(null); }}>Cancelar</button>
+                <button type="submit" className="btn-primary">Salvar Alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Offer Modal */}
+      {isOfferModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Adicionar Oferta Relâmpago</h2>
+              <button className="close-btn" onClick={() => setIsOfferModalOpen(false)}>×</button>
+            </div>
+            <form onSubmit={handleAddOfferSubmit}>
+              <div className="form-group">
+                <label>Selecione o Produto</label>
+                <select required value={offerFormData.itemId} onChange={e => setOfferFormData({...offerFormData, itemId: e.target.value})}>
+                  <option value="">-- Escolha um produto --</option>
+                  {items.map(i => (
+                    <option key={i.id} value={i.id}>{i.sku} - {i.name} (R$ {Number(i.price).toFixed(2)})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Novo Valor Promocional (R$)</label>
+                <input type="number" step="0.01" min="0.01" required value={offerFormData.offerPrice} onChange={e => setOfferFormData({...offerFormData, offerPrice: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Duração da Oferta (Horas)</label>
+                <input type="number" min="1" required value={offerFormData.hours} onChange={e => setOfferFormData({...offerFormData, hours: e.target.value})} placeholder="Ex: 24" />
+                <small style={{ color: 'var(--text-secondary)' }}>O cronômetro na vitrine iniciará a partir de agora com a duração definida.</small>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn-secondary" onClick={() => setIsOfferModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}>Lançar Oferta</button>
               </div>
             </form>
           </div>
@@ -2041,20 +2671,52 @@ function App() {
         </div>
       )}
 
-      {/* CNPJ Edit Modal */}
-      {isCnpjModalOpen && (
+      {/* Profile Edit Modal */}
+      {isProfileModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h2>Editar CNPJ da Empresa</h2>
-              <button className="close-btn" onClick={() => setIsCnpjModalOpen(false)}>×</button>
+              <h2>Editar Meu Perfil</h2>
+              <button className="close-btn" onClick={() => setIsProfileModalOpen(false)}>×</button>
             </div>
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label>Digite o CNPJ (Apenas Números)</label>
+            
+            <div className="form-group">
+              <label>Seu Nome</label>
+              <input 
+                type="text" 
+                value={tempProfile.name}
+                onChange={(e) => setTempProfile({...tempProfile, name: e.target.value})}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label>Sua Função</label>
+              <select 
+                value={tempProfile.role}
+                onChange={(e) => setTempProfile({...tempProfile, role: e.target.value})}
+              >
+                <option value="Administrador">Administrador</option>
+                <option value="Gerente">Gerente</option>
+                <option value="Vendedor">Vendedor</option>
+                <option value="Estoque">Estoque</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label>Nome da Empresa (Loja)</label>
+              <input 
+                type="text" 
+                value={tempProfile.company}
+                onChange={(e) => setTempProfile({...tempProfile, company: e.target.value})}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem', marginBottom: '1.5rem' }}>
+              <label>CNPJ da Empresa</label>
               <input 
                 type="text" 
                 placeholder="00.000.000/0000-00"
-                value={tempCnpj}
+                value={tempProfile.companyCnpj}
                 maxLength={18}
                 onChange={(e) => {
                   let v = e.target.value.replace(/\D/g, '');
@@ -2063,16 +2725,40 @@ function App() {
                   v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
                   v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
                   v = v.replace(/(\d{4})(\d)/, '$1-$2');
-                  setTempCnpj(v);
+                  setTempProfile({...tempProfile, companyCnpj: v});
                 }}
               />
             </div>
+            
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => setIsCnpjModalOpen(false)}>Cancelar</button>
-              <button type="button" className="btn-primary" onClick={() => {
-                setCurrentUser({...currentUser, cnpj: tempCnpj});
-                setIsCnpjModalOpen(false);
-              }}>Salvar Alteração</button>
+              <button type="button" className="btn-secondary" onClick={() => setIsProfileModalOpen(false)}>Cancelar</button>
+              <button type="button" className="btn-primary" onClick={async () => {
+                const cpfClean = currentUser.cpf.replace(/\D/g, '');
+                const userRef = doc(db, 'users', cpfClean);
+                try {
+                  await setDoc(userRef, {
+                    name: tempProfile.name,
+                    role: tempProfile.role,
+                    company: tempProfile.company,
+                    companyCnpj: tempProfile.companyCnpj,
+                    cnpj: tempProfile.companyCnpj
+                  }, { merge: true });
+                  
+                  setCurrentUser({
+                    ...currentUser, 
+                    name: tempProfile.name,
+                    role: tempProfile.role,
+                    company: tempProfile.company,
+                    companyCnpj: tempProfile.companyCnpj,
+                    cnpj: tempProfile.companyCnpj
+                  });
+                  setIsProfileModalOpen(false);
+                  alert("Perfil atualizado com sucesso! Os produtos cadastrados a partir de agora estarão no novo CNPJ.");
+                } catch (e) {
+                  console.error(e);
+                  alert("Erro ao atualizar o perfil. Tente novamente.");
+                }
+              }}>Salvar Alterações</button>
             </div>
           </div>
         </div>
@@ -2346,6 +3032,7 @@ function App() {
                     <th>Valor Total</th>
                     <th>Chave de Acesso</th>
                     <th>Status</th>
+                    <th>PDF</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2356,12 +3043,17 @@ function App() {
                         <td>{deal.client}</td>
                         <td><strong>R$ {Number(deal.value).toFixed(2)}</strong></td>
                         <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          3526 0900 ... 5500 1000
+                          {deal.chaveAcesso ? deal.chaveAcesso.replace(/(\d{4})/g, '$1 ').trim() : '3526 0900 ... 5500 1000'}
                         </td>
                         <td>
                           <span style={{ fontSize: '0.75rem', background: 'var(--success)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 'bold' }}>
                             Autorizada
                           </span>
+                        </td>
+                        <td>
+                          <button onClick={() => handleViewPdf(deal)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }} title="Visualizar PDF">
+                            📄
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -2379,6 +3071,183 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Tracking Modal */}
+      {trackingModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Atualizar Rastreamento</h2>
+              <button className="close-btn" onClick={() => setTrackingModal(null)}>×</button>
+            </div>
+            
+            <div style={{ marginBottom: '1.5rem', maxHeight: '200px', overflowY: 'auto', background: '#f5f5f5', padding: '1rem', borderRadius: '0.5rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0' }}>Histórico:</h4>
+              {(() => {
+                const deal = deals.find(d => d.id === trackingModal.dealId);
+                const trackList = deal?.tracking || [];
+                if(trackList.length === 0) return <p style={{ fontSize: '0.85rem', color: '#666' }}>Nenhuma atualização ainda.</p>;
+                return trackList.map((t, i) => (
+                  <div key={i} style={{ borderBottom: '1px solid #ddd', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#999' }}>{new Date(t.date).toLocaleString('pt-BR')}</div>
+                    <div style={{ fontSize: '0.85rem' }}>{t.msg}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <form onSubmit={handleAddTrackingMessage}>
+              <div className="form-group">
+                <label>Status Principal</label>
+                <select 
+                  value={trackingModal.status || 'Recebido'}
+                  onChange={e => setTrackingModal({...trackingModal, status: e.target.value})}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', marginBottom: '1rem', background: '#fff' }}
+                >
+                  <option value="Recebido">Recebido</option>
+                  <option value="Preparando">Preparando</option>
+                  <option value="Em Trânsito">Em Trânsito</option>
+                  <option value="Entregue">Entregue</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Nova Atualização (Opcional)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Saiu para entrega..."
+                  value={trackingModal.msg || ''}
+                  onChange={e => setTrackingModal({...trackingModal, msg: e.target.value})}
+                />
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn-secondary" onClick={() => setTrackingModal(null)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Atualizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Internal Chat Modal (Admin) */}
+      {internalChat && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content glass-panel" style={{ width: '400px', maxWidth: '90%', display: 'flex', flexDirection: 'column', height: '600px' }}>
+            <div className="modal-header">
+              <h2>Atendimento (Protocolo #{internalChat.dealId.slice(-6)})</h2>
+              <button className="close-btn" onClick={() => setInternalChat(null)}>×</button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', background: '#f5f5f5', padding: '1rem', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+              {(() => {
+                const deal = deals.find(d => d.id === internalChat.dealId);
+                const messages = deal?.messages || [];
+                if (messages.length === 0) return <div style={{ textAlign: 'center', color: '#999', marginTop: '2rem' }}>Nenhuma mensagem ainda.</div>;
+                
+                return messages.map((m, i) => {
+                  const isAdmin = m.role === 'admin';
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-end' : 'flex-start' }}>
+                      <div style={{ 
+                        background: isAdmin ? '#dcf8c6' : '#fff', 
+                        padding: '0.75rem', 
+                        borderRadius: '0.5rem', 
+                        maxWidth: '85%',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                      }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isAdmin ? '#00a650' : '#333', marginBottom: '0.25rem' }}>
+                          {m.sender} {isAdmin ? '(Vendedor)' : '(Cliente)'}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#333', wordBreak: 'break-word' }}>
+                          {m.text}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: '#999', textAlign: 'right', marginTop: '0.25rem' }}>
+                          {new Date(m.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+              {["Olá, como posso ajudar?", "Seu pedido está em separação.", "Produto em rota de entrega!", "Obrigado pela compra!"].map((msg, i) => (
+                <button 
+                  key={i} 
+                  type="button"
+                  onClick={() => setInternalChat({...internalChat, msg})}
+                  style={{ background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', color: '#333' }}
+                >
+                  {msg}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendInternalMessage} style={{ display: 'flex', gap: '0.5rem' }}>
+              <input 
+                type="text" 
+                placeholder="Digite sua mensagem..." 
+                value={internalChat.msg}
+                onChange={e => setInternalChat({...internalChat, msg: e.target.value})}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: '1px solid #ccc' }}
+              />
+              <button type="submit" className="btn-primary" style={{ borderRadius: '2rem', padding: '0.75rem 1.5rem' }}>
+                Enviar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Birthday Message Modal */}
+      {isBirthdayMessageModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Configurar Mensagem de Aniversário</h2>
+              <button className="close-btn" onClick={() => setIsBirthdayMessageModalOpen(false)}>×</button>
+            </div>
+            <div className="form-group">
+              <label>Desconto (%)</label>
+              <input 
+                type="number" 
+                value={birthdayDiscount} 
+                onChange={(e) => setBirthdayDiscount(e.target.value)} 
+                min="1" max="100" 
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label>Template da Mensagem (WhatsApp)</label>
+              <textarea 
+                rows="4" 
+                value={birthdayMessageTemplate}
+                onChange={(e) => setBirthdayMessageTemplate(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.5rem 0 0 0' }}>
+                Variáveis disponíveis: {'{nome}'}, {'{cupom}'}, {'{desconto}'}
+              </p>
+            </div>
+            <button className="btn-primary" onClick={() => setIsBirthdayMessageModalOpen(false)} style={{ width: '100%' }}>
+              Salvar Modelo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer style={{
+        marginTop: 'auto',
+        textAlign: 'center',
+        padding: '2rem 1rem',
+        fontSize: '0.85rem',
+        color: 'var(--text-secondary)',
+        borderTop: '1px solid var(--glass-border)',
+        width: '100%',
+        background: 'transparent'
+      }}>
+        © 2026 Direitos Reservados - Feito com ❤️ pela equipe GESTE
+      </footer>
     </div>
   );
 }
