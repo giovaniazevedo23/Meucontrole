@@ -28,8 +28,9 @@ const CONFIG = {
 // ============================================================
 
 function doGet(e) {
-  const params = e.parameter;
+  const params = (e && e.parameter) ? e.parameter : {};
   const nomeDaAba = params.aba || null;
+
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
