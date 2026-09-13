@@ -24,7 +24,7 @@ function App() {
 
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
-  const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('controle_orders')) || []);
+  const [orders, setOrders] = useState([]);
   const [activeTab, setActiveTab] = useState('estoque'); // 'estoque', 'movimentacoes', 'relatorios', 'compras'
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,6 +144,11 @@ function App() {
       setDevServices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const ordersQ = query(collection(db, 'orders'), where('companyCnpj', '==', activeCnpj));
+    const unsubOrders = onSnapshot(ordersQ, (snap) => {
+      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
       setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -165,10 +170,12 @@ function App() {
       unsubCustomers();
       unsubExpenses();
       unsubDev();
+      unsubOrders();
+      unsubComp();
     };
   }, [currentUser]);
 
-  useEffect(() => { localStorage.setItem('controle_orders', JSON.stringify(orders)); }, [orders]);
+
   useEffect(() => { localStorage.setItem('controle_user', JSON.stringify(currentUser)); }, [currentUser]);
   useEffect(() => { localStorage.setItem('controle_goal', JSON.stringify(salesGoal)); }, [salesGoal]);
   useEffect(() => { localStorage.setItem('controle_cart', JSON.stringify(cart)); }, [cart]);
@@ -689,62 +696,74 @@ function App() {
       alert('Adicione pelo menos um produto ao pedido!');
       return;
     }
+    const activeCnpj = currentUser?.companyCnpj || currentUser?.cnpj || '00.000.000/0001-00';
     const order = {
       ...newOrder,
       id: Date.now().toString(),
       status: 'Requisição',
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      companyCnpj: activeCnpj
     };
-    setOrders([...orders, order]);
-    setIsOrderModalOpen(false);
-    setNewOrder({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
+    try {
+      await setDoc(doc(db, 'orders', order.id), order);
+      setIsOrderModalOpen(false);
+      setNewOrder({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
+    } catch (err) {
+      console.error('Erro ao salvar pedido:', err);
+    }
   };
 
-  const advanceOrderStatus = (orderId, currentStatus) => {
+  const advanceOrderStatus = async (orderId, currentStatus) => {
     const statusFlow = ['Requisição', 'Pedido de Compra', 'Aprovação', 'Faturado pelo Fornecedor', 'Recebido'];
     const currentIndex = statusFlow.indexOf(currentStatus);
     if (currentIndex < statusFlow.length - 1) {
       const nextStatus = statusFlow[currentIndex + 1];
       
-      if (nextStatus === 'Recebido') {
-        const order = orders.find(o => o.id === orderId);
-        let updatedItems = [...items];
-        let newMovements = [...movements];
-        const date = new Date().toISOString();
+      try {
+        if (nextStatus === 'Recebido') {
+          const order = orders.find(o => o.id === orderId);
+          const date = new Date().toISOString();
+          const activeCnpj = currentUser?.companyCnpj || currentUser?.cnpj || '00.000.000/0001-00';
 
-        order.products.forEach(prod => {
-          const existingItemIndex = updatedItems.findIndex(i => i.sku === prod.sku);
-          if (existingItemIndex >= 0) {
-            updatedItems[existingItemIndex].quantity += Number(prod.quantity);
-            updatedItems[existingItemIndex].lastMovementDate = date;
-          } else {
-            updatedItems.push({
-              id: Date.now().toString() + Math.random().toString(),
+          for (const prod of order.products) {
+            const existingItem = items.find(i => i.sku === prod.sku);
+            if (existingItem) {
+              await setDoc(doc(db, 'items', existingItem.id), { ...existingItem, quantity: existingItem.quantity + Number(prod.quantity), lastMovementDate: date });
+            } else {
+              const newItemId = Date.now().toString() + Math.random().toString();
+              await setDoc(doc(db, 'items', newItemId), {
+                id: newItemId,
+                sku: prod.sku,
+                name: prod.name,
+                quantity: Number(prod.quantity),
+                price: Number(prod.price),
+                location: prod.location || 'Não definida',
+                lastMovementDate: date,
+                companyCnpj: activeCnpj
+              });
+            }
+            
+            const movId = Date.now().toString() + Math.random().toString();
+            await setDoc(doc(db, 'movements', movId), {
+              id: movId,
               sku: prod.sku,
-              name: prod.name,
+              type: 'ENTRADA',
               quantity: Number(prod.quantity),
-              price: Number(prod.price),
-              location: prod.location || 'Não definida',
-              lastMovementDate: date
+              date: date,
+              user: currentUser.name,
+              reason: `Pedido de Compra: ${order.supplier}`,
+              companyCnpj: activeCnpj
             });
           }
-          
-          newMovements.unshift({
-            id: Date.now().toString() + Math.random().toString(),
-            sku: prod.sku,
-            type: 'ENTRADA',
-            quantity: Number(prod.quantity),
-            date: date,
-            user: currentUser.name,
-            reason: `Pedido de Compra: ${order.supplier}`
-          });
-        });
+        }
         
-        setItems(updatedItems);
-        setMovements(newMovements);
+        const orderToUpdate = orders.find(o => o.id === orderId);
+        if (orderToUpdate) {
+          await setDoc(doc(db, 'orders', orderId), { ...orderToUpdate, status: nextStatus });
+        }
+      } catch (err) {
+        console.error('Erro ao avançar status do pedido:', err);
       }
-      
-      setOrders(orders.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
     }
   };
 
