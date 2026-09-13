@@ -5,6 +5,7 @@ import './App.css';
 
 import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, getDocs, query, where, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import emailjs from '@emailjs/browser';
 import { generateDanfeHtml } from './utils/danfeTemplate';
 const getStatusDetails = (quantity) => {
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
@@ -16,7 +17,7 @@ function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
   const [loginMode, setLoginMode] = useState('login'); // 'login' | 'register'
-  const [loginData, setLoginData] = useState({ name: '', cpf: '', company: '', companyCnpj: '', role: 'Vendedor', phone: '' });
+  const [loginData, setLoginData] = useState({ name: '', email: '', cpf: '', company: '', companyCnpj: '', role: 'Vendedor', phone: '' });
 
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -526,9 +527,10 @@ function App() {
         return;
       }
       
-      if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj) {
+      if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj && loginData.email) {
         const userDoc = {
           name: loginData.name,
+          email: loginData.email,
           cpf: loginData.cpf,
           company: loginData.company,
           companyCnpj: loginData.companyCnpj,
@@ -538,6 +540,52 @@ function App() {
         };
         await setDoc(doc(db, 'users', cpfClean), userDoc);
         setCurrentUser({...userDoc});
+
+        try {
+          const sellerWelcomeHtml = `
+            <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 20px;">
+                <h1 style="color: #007bff; margin: 0; font-size: 28px;">GESTE</h1>
+              </div>
+              <p style="font-size: 16px;">Olá, <strong>${loginData.name}</strong>,</p>
+              <p style="font-size: 16px;">É com muita alegria que damos as boas-vindas à GESTE! Estamos muito felizes por você ter nos escolhido para fazer parte da jornada de crescimento da sua empresa. 🚀</p>
+              <p style="font-size: 16px;">Nós sabemos que gerenciar um negócio exige muito esforço. Por isso, criamos a GESTE para ser a sua parceira ideal, simplificando sua rotina para que você tenha tempo de focar no que realmente importa: vender e crescer.</p>
+              <p style="font-size: 16px;">Com a nossa plataforma, você tem o controle total do seu negócio em um só lugar:</p>
+              <ul style="font-size: 16px; line-height: 1.6;">
+                <li>📦 <strong>Gestão de Estoque Inteligente:</strong> Saiba exatamente o que entrou, o que saiu e o que está parado no seu estoque.</li>
+                <li>💰 <strong>Controle Financeiro Descomplicado:</strong> Acompanhe suas finanças de perto, registrando todas as entradas, vendas e lucros com clareza.</li>
+                <li>🛍️ <strong>Sua Loja Virtual Integrada:</strong> Ao cadastrar sua empresa, você ganha automaticamente um site exclusivo! Uma plataforma completa onde seus clientes podem visualizar todos os seus produtos e fazer compras de forma rápida e segura.</li>
+              </ul>
+              <p style="font-size: 16px; margin-top: 20px;">Que tal darmos o primeiro passo?</p>
+              <p style="font-size: 16px;">Para ver a mágica acontecer, sugerimos que você comece cadastrando os dados da sua empresa e adicionando seus primeiros produtos.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://geste.onrender.com" style="background-color: #007bff; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Acessar Minha Conta e Começar</a>
+              </div>
+              <p style="font-size: 14px; color: #777;">Se bater alguma dúvida ou precisar de ajuda para configurar sua loja, não se preocupe! Nossa equipe de suporte está sempre à disposição. É só responder a este e-mail.</p>
+              <p style="font-size: 16px; margin-bottom: 5px;">Desejamos muito sucesso e vendas incríveis!</p>
+              <p style="font-size: 16px; font-weight: bold; margin-top: 0;">Um grande abraço,<br>Equipe GESTE 💙</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <div style="text-align: center; font-size: 12px; color: #999;">
+                <a href="https://geste.onrender.com" style="color: #007bff; text-decoration: none;">Acesse nosso site</a>
+              </div>
+            </div>
+          `;
+
+          await emailjs.send(
+            'service_n2k30o9',
+            'template_tht2nks',
+            {
+              to_email: loginData.email,
+              subject: '🎉 Bem-vindo(a) à GESTE! Prepare-se para transformar o seu negócio.',
+              html_message: sellerWelcomeHtml
+            },
+            {
+              publicKey: 'mNLHg4WMPI_KmzA8c'
+            }
+          );
+        } catch (emailErr) {
+          console.error("Erro ao enviar email de boas-vindas (vendedor):", emailErr);
+        }
       }
     }
   };
@@ -914,16 +962,28 @@ function App() {
 
           <form onSubmit={handleLogin}>
             {loginMode === 'register' && (
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>Nome Completo</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="Ex: João Silva"
-                  value={loginData.name}
-                  onChange={e => setLoginData({...loginData, name: e.target.value})}
-                />
-              </div>
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>E-mail</label>
+                  <input 
+                    type="email" 
+                    required 
+                    placeholder="Seu melhor e-mail"
+                    value={loginData.email}
+                    onChange={e => setLoginData({...loginData, email: e.target.value})}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>Nome Completo</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Ex: João Silva"
+                    value={loginData.name}
+                    onChange={e => setLoginData({...loginData, name: e.target.value})}
+                  />
+                </div>
+              </>
             )}
             
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
