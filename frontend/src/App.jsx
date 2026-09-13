@@ -1625,7 +1625,6 @@ function App() {
                     <th>Motivo</th>
                     <th>Usuário</th>
                     <th>Cliente</th>
-                    <th>Cliente</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1642,12 +1641,11 @@ function App() {
                       <td>{m.reason}</td>
                       <td>{m.user}</td>
                       <td>{m.client || (m.reason?.includes('(Cliente:') ? m.reason.split('(Cliente:')[1].replace(')','') : "-")}</td>
-                      <td>{m.client || (m.reason?.includes('(Cliente:') ? m.reason.split('(Cliente:')[1].replace(')','') : "-")}</td>
                     </tr>
                   ))}
                   {movements.filter(m => (movementFilter === 'ALL' || (movementFilter === 'CLIENTE' && (m.client || m.reason?.includes('(Cliente:'))) || m.type === movementFilter)).length === 0 && (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Nenhuma movimentação encontrada para este filtro.</td>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Nenhuma movimentação encontrada para este filtro.</td>
                     </tr>
                   )}
                 </tbody>

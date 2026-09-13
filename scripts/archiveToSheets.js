@@ -512,12 +512,39 @@ function parseFirestoreDoc(doc) {
   const parsed = {};
   const fields = doc.fields;
   for (let key in fields) {
-    const value = fields[key];
-    if (value.hasOwnProperty("stringValue"))       parsed[key] = value.stringValue;
-    else if (value.hasOwnProperty("integerValue")) parsed[key] = Number(value.integerValue);
-    else if (value.hasOwnProperty("doubleValue"))  parsed[key] = Number(value.doubleValue);
-    else if (value.hasOwnProperty("booleanValue")) parsed[key] = value.booleanValue;
-    else parsed[key] = JSON.stringify(value);
+    parsed[key] = parseFirestoreValue(fields[key]);
   }
   return parsed;
+}
+
+/**
+ * Converte um valor do formato Firestore REST API para valor nativo JS.
+ * Suporta: string, integer, double, boolean, array, map, null, timestamp.
+ */
+function parseFirestoreValue(value) {
+  if (value.hasOwnProperty("stringValue"))    return value.stringValue;
+  if (value.hasOwnProperty("integerValue"))   return Number(value.integerValue);
+  if (value.hasOwnProperty("doubleValue"))    return Number(value.doubleValue);
+  if (value.hasOwnProperty("booleanValue"))   return value.booleanValue;
+  if (value.hasOwnProperty("nullValue"))      return null;
+  if (value.hasOwnProperty("timestampValue")) return value.timestampValue;
+
+  // Array: converte cada item recursivamente
+  if (value.hasOwnProperty("arrayValue")) {
+    const items = (value.arrayValue.values || []);
+    return items.map(function(v) { return parseFirestoreValue(v); });
+  }
+
+  // Map: converte cada campo recursivamente
+  if (value.hasOwnProperty("mapValue")) {
+    const result = {};
+    const fields = value.mapValue.fields || {};
+    for (let k in fields) {
+      result[k] = parseFirestoreValue(fields[k]);
+    }
+    return result;
+  }
+
+  // Fallback seguro
+  return JSON.stringify(value);
 }
