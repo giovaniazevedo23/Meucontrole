@@ -82,6 +82,11 @@ function App() {
   // Companies / Lojas States
   const [companies, setCompanies] = useState([]);
   const [newCompany, setNewCompany] = useState({ name: '', cnpj: '' });
+  
+  // Expenses State
+  const [expenses, setExpenses] = useState([]);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [newExpense, setNewExpense] = useState({ description: '', amount: '', dueDate: '', status: 'Pendente' });
 
   useEffect(() => {
     if (!currentUser || !currentUser.companyCnpj) {
@@ -109,6 +114,11 @@ function App() {
       setMovements(list);
     });
 
+    const expensesQ = query(collection(db, 'expenses'), where('companyCnpj', '==', activeCnpj));
+    const unsubExpenses = onSnapshot(expensesQ, (snap) => {
+      setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
       setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -121,7 +131,15 @@ function App() {
       setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubItems(); unsubDeals(); unsubMov(); unsubComp(); unsubCoupons(); unsubCustomers(); };
+    return () => { 
+      unsubItems(); 
+      unsubDeals(); 
+      unsubMov(); 
+      unsubComp(); 
+      unsubCoupons();
+      unsubCustomers();
+      unsubExpenses();
+    };
   }, [currentUser]);
 
   useEffect(() => { localStorage.setItem('controle_orders', JSON.stringify(orders)); }, [orders]);
@@ -210,6 +228,16 @@ function App() {
   const winRate = closedCount > 0 ? ((totalWonCount / closedCount) * 100).toFixed(1) : 0;
   const avgTicket = totalWonCount > 0 ? (totalWonValue / totalWonCount) : 0;
 
+  // Real financial calculations
+  const wonDeals = deals.filter(d => d.status === 'Ganho');
+  const receivedByPix = wonDeals.filter(d => d.paymentMethod === 'PIX').reduce((acc, d) => acc + (d.value || 0), 0);
+  const receivedByCard = wonDeals.filter(d => d.paymentMethod === 'Cartão').reduce((acc, d) => acc + (d.value || 0), 0);
+  const receivedByCredit = wonDeals.filter(d => d.paymentMethod === 'Crediário').reduce((acc, d) => acc + (d.value || 0), 0);
+  const receivedByOther = wonDeals.filter(d => !d.paymentMethod || (d.paymentMethod !== 'PIX' && d.paymentMethod !== 'Cartão' && d.paymentMethod !== 'Crediário')).reduce((acc, d) => acc + (d.value || 0), 0);
+
+  const totalPendingExpenses = expenses.filter(e => e.status === 'Pendente').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  const totalPaidExpenses = expenses.filter(e => e.status === 'Pago').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+
   // Filter items based on search
   const filteredItems = items.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -222,6 +250,43 @@ function App() {
   const totalQuantity = items.reduce((acc, curr) => acc + Number(curr.quantity), 0);
   const criticalStockItems = items.filter(i => i.quantity <= 5).length;
   const lowStockItems = items.filter(i => i.quantity > 5 && i.quantity <= 20).length;
+
+  const handleAddExpense = async (e) => {
+    e.preventDefault();
+    if (!newExpense.description || !newExpense.amount) return;
+    const activeCnpj = currentUser?.companyCnpj || '00.000.000/0001-00';
+    try {
+      await addDoc(collection(db, 'expenses'), {
+        ...newExpense,
+        amount: Number(newExpense.amount),
+        companyCnpj: activeCnpj,
+        createdAt: new Date().toISOString()
+      });
+      setNewExpense({ description: '', amount: '', dueDate: '', status: 'Pendente' });
+      setIsExpenseModalOpen(false);
+    } catch(err) {
+      console.error(err);
+      alert('Erro ao adicionar despesa.');
+    }
+  };
+
+  const handleDeleteExpense = async (id) => {
+    if (!window.confirm('Remover esta despesa?')) return;
+    try {
+      await deleteDoc(doc(db, 'expenses', id));
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleExpenseStatus = async (expense) => {
+    const newStatus = expense.status === 'Pago' ? 'Pendente' : 'Pago';
+    try {
+      await updateDoc(doc(db, 'expenses', expense.id), { status: newStatus });
+    } catch(err) {
+      console.error(err);
+    }
+  };
 
   const handleAddItem = async (e) => {
     e.preventDefault();
@@ -1659,20 +1724,43 @@ function App() {
                       <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', flex: 1 }}>
                         <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Contas a receber</h3>
                         <div style={{ fontSize: '2.5rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↓ R$ {Number(totalWonValue * 0.4).toFixed(2)}
+                          ↓ R$ {totalWonValue.toFixed(2)}
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.5rem 0' }}>
-                          Cartão de crédito: {Number(totalWonValue * 0.2).toFixed(2)} &nbsp;&nbsp; Crediário: {Number(totalWonValue * 0.2).toFixed(2)}
-                        </p>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {receivedByPix > 0 && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '99px' }}>PIX: R$ {receivedByPix.toFixed(2)}</span>}
+                          {receivedByCard > 0 && <span style={{ background: '#f0fdf4', color: '#15803d', padding: '2px 8px', borderRadius: '99px' }}>Cartão: R$ {receivedByCard.toFixed(2)}</span>}
+                          {receivedByCredit > 0 && <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '99px' }}>Crediário: R$ {receivedByCredit.toFixed(2)}</span>}
+                          {receivedByOther > 0 && <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: '99px' }}>Outros: R$ {receivedByOther.toFixed(2)}</span>}
+                          {totalWonValue === 0 && <span style={{ color: '#999' }}>Nenhuma venda ainda</span>}
+                        </div>
                       </div>
                       <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', flex: 1 }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Contas a pagar</h3>
-                        <div style={{ fontSize: '2.5rem', color: 'var(--danger)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↑ R$ 1.338,00
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Contas a pagar</h3>
+                          <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setIsExpenseModalOpen(true)}>+ Despesa</button>
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.5rem 0' }}>
-                          Fornecedores: 838,00 &nbsp;&nbsp; Despesas: 500,00
-                        </p>
+                        <div style={{ fontSize: '2.5rem', color: 'var(--danger)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          ↑ R$ {totalPendingExpenses.toFixed(2)}
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}>
+                          <span style={{ color: '#dc2626' }}>Pendente: R$ {totalPendingExpenses.toFixed(2)}</span>
+                          <span style={{ color: '#16a34a' }}>Pago: R$ {totalPaidExpenses.toFixed(2)}</span>
+                        </div>
+                        {expenses.length > 0 && (
+                          <div style={{ marginTop: '0.75rem', maxHeight: '100px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {expenses.slice(0, 5).map(exp => (
+                              <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', background: exp.status === 'Pago' ? '#f0fdf4' : '#fff7ed', padding: '4px 8px', borderRadius: '6px' }}>
+                                <span style={{ color: '#333', flex: 1 }}>{exp.description}</span>
+                                <span style={{ fontWeight: 'bold', color: exp.status === 'Pago' ? '#16a34a' : '#dc2626', marginLeft: '0.5rem' }}>R$ {Number(exp.amount).toFixed(2)}</span>
+                                <button onClick={() => handleToggleExpenseStatus(exp)} style={{ marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: exp.status === 'Pago' ? '#dc2626' : '#16a34a', padding: '2px 5px' }}>
+                                  {exp.status === 'Pago' ? '↩ Reverter' : '✓ Pago'}
+                                </button>
+                                <button onClick={() => handleDeleteExpense(exp.id)} style={{ marginLeft: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '0.85rem' }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {expenses.length === 0 && <p style={{ fontSize: '0.8rem', color: '#999', margin: '0.5rem 0 0' }}>Nenhuma despesa cadastrada</p>}
                       </div>
                     </div>
 
@@ -3073,6 +3161,67 @@ function App() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
               <button className="btn-secondary" onClick={() => setIsNfeListModalOpen(false)}>Fechar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Modal */}
+      {isExpenseModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h2>📋 Cadastrar Despesa</h2>
+              <button className="close-btn" onClick={() => setIsExpenseModalOpen(false)}>×</button>
+            </div>
+            <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Descrição *</label>
+                <input
+                  className="input-primary"
+                  placeholder="Ex: Fornecedor de Celulares, Conta de Luz..."
+                  value={newExpense.description}
+                  onChange={e => setNewExpense(prev => ({ ...prev, description: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Valor (R$) *</label>
+                <input
+                  className="input-primary"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  value={newExpense.amount}
+                  onChange={e => setNewExpense(prev => ({ ...prev, amount: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Vencimento</label>
+                <input
+                  className="input-primary"
+                  type="date"
+                  value={newExpense.dueDate}
+                  onChange={e => setNewExpense(prev => ({ ...prev, dueDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Status</label>
+                <select
+                  className="input-primary"
+                  value={newExpense.status}
+                  onChange={e => setNewExpense(prev => ({ ...prev, status: e.target.value }))}
+                >
+                  <option value="Pendente">⏳ Pendente</option>
+                  <option value="Pago">✅ Pago</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsExpenseModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Salvar Despesa</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
