@@ -2368,8 +2368,8 @@ function App() {
         </div>
 
         {isDevModalOpen && (
-          <div className="modal-overlay" onClick={() => setIsDevModalOpen(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+          <div className="modal-overlay" onClick={() => setIsDevModalOpen(false)} style={{ zIndex: 1100 }}>
+            <div className="modal-content glass-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', background: 'var(--bg-card, #fff)' }}>
               <div className="modal-header">
                 <h2>Novo Serviço (Programação)</h2>
                 <button className="close-btn" onClick={() => setIsDevModalOpen(false)}>×</button>
