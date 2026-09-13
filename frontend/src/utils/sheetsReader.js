@@ -37,7 +37,7 @@ export async function fetchSheetTab(nomeDaAba) {
   }
 
   try {
-    const url = `${APPS_SCRIPT_URL}?aba=${encodeURIComponent(nomeDaAba)}`;
+    const url = `${APPS_SCRIPT_URL}?aba=${encodeURIComponent(nomeDaAba)}&t=${Date.now()}`;
     const response = await fetch(url);
     const json = await response.json();
 
@@ -64,7 +64,8 @@ export async function fetchAllSheets() {
   }
 
   try {
-    const response = await fetch(APPS_SCRIPT_URL);
+    const url = `${APPS_SCRIPT_URL}?t=${Date.now()}`;
+    const response = await fetch(url);
     const json = await response.json();
 
     if (!json.success) {

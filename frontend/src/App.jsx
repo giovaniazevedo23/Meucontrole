@@ -1881,7 +1881,12 @@ function App() {
                       onClick={handleLoadSheets}
                       disabled={sheetsLoading}
                     >
-                      {sheetsLoading ? '⏱️ Carregando...' : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
+                      {sheetsLoading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                          Carregando...
+                        </div>
+                      ) : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
                     </button>
                   </div>
                 </div>
@@ -1894,7 +1899,9 @@ function App() {
 
                 {sheetsLoading && (
                   <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏱️</div>
+                    <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'center' }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
                     <p style={{ margin: 0 }}>Buscando dados da planilha...</p>
                   </div>
                 )}
@@ -2063,9 +2070,9 @@ function App() {
                       </div>
                       
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', margin: '2rem 0' }}>
-                        <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '50%', background: `conic-gradient(var(--primary-color) ${(totalWonValue / salesGoal) * 100}%, #e2e8f0 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '50%', background: `conic-gradient(var(--primary-color) ${(Number(salesGoal) > 0 ? (totalWonValue / Number(salesGoal)) * 100 : 0)}%, #e2e8f0 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                            {Math.min(100, Math.round((totalWonValue / salesGoal) * 100))}%
+                            {Number(salesGoal) > 0 ? Math.min(100, Math.round((totalWonValue / Number(salesGoal)) * 100)) : 0}%
                           </div>
                         </div>
                         <div>
