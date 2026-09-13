@@ -7,6 +7,9 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, getDocs, query,
 import { db } from './firebase';
 import emailjs from '@emailjs/browser';
 import { generateDanfeHtml } from './utils/danfeTemplate';
+import { fetchAllSheets, SHEET_TABS } from './utils/sheetsReader';
+import { exportToExcel, exportMultipleSheetsToExcel } from './utils/excelExport';
+import { exportToPdf } from './utils/pdfExport';
 const getStatusDetails = (quantity) => {
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
   if (quantity <= 20) return { text: 'Estoque Baixo', className: 'status-low-stock' };
@@ -86,6 +89,25 @@ function App() {
   const [isDevManagerOpen, setIsDevManagerOpen] = useState(false);
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [newDevService, setNewDevService] = useState({ title: '', value: '', dueDate: '', status: 'Pendente' });
+
+  // Google Sheets Archive State
+  const [sheetsData, setSheetsData] = useState({});
+  const [sheetsLoading, setSheetsLoading] = useState(false);
+  const [sheetsLoaded, setSheetsLoaded] = useState(false);
+  const [sheetsActiveTab, setSheetsActiveTab] = useState('Vendas Arquivadas');
+
+  const handleLoadSheets = async () => {
+    setSheetsLoading(true);
+    try {
+      const data = await fetchAllSheets();
+      setSheetsData(data);
+      setSheetsLoaded(true);
+    } catch(err) {
+      console.error('Erro ao carregar planilha:', err);
+    } finally {
+      setSheetsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser || !currentUser.companyCnpj) {
@@ -1789,6 +1811,144 @@ function App() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* ===== PLANILHAS ARQUIVADAS ===== */}
+              <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', marginTop: '1.5rem', border: '1px solid rgba(26,115,232,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      📊 Planilhas Arquivadas (Google Sheets)
+                    </h3>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Dados históricos arquivados automaticamente pelo Apps Script
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {sheetsLoaded && (
+                      <>
+                        <button
+                          className="btn-secondary"
+                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
+                          onClick={() => exportToExcel(
+                            sheetsData[sheetsActiveTab] || [],
+                            sheetsActiveTab,
+                            sheetsActiveTab
+                          )}
+                        >
+                          ⬇ Excel (aba atual)
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
+                          onClick={() => exportMultipleSheetsToExcel(sheetsData, 'Relatorio_Completo')}
+                        >
+                          ⬇ Excel (tudo)
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
+                          onClick={() => exportToPdf(
+                            sheetsData[sheetsActiveTab] || [],
+                            sheetsActiveTab,
+                            sheetsActiveTab
+                          )}
+                        >
+                          ⬇ PDF
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="btn-primary"
+                      style={{ fontSize: '0.85rem', padding: '0.45rem 1rem' }}
+                      onClick={handleLoadSheets}
+                      disabled={sheetsLoading}
+                    >
+                      {sheetsLoading ? '⏳ Carregando...' : sheetsLoaded ? '🔄 Atualizar' : '📥 Carregar Planilhas'}
+                    </button>
+                  </div>
+                </div>
+
+                {!sheetsLoaded && !sheetsLoading && (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(26,115,232,0.04)', borderRadius: '0.75rem', border: '1px dashed rgba(26,115,232,0.2)' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📋</div>
+                    <p style={{ margin: 0, fontWeight: 500 }}>Clique em "Carregar Planilhas" para buscar os dados arquivados do Google Sheets</p>
+                  </div>
+                )}
+
+                {sheetsLoading && (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
+                    <p style={{ margin: 0 }}>Buscando dados da planilha...</p>
+                  </div>
+                )}
+
+                {sheetsLoaded && !sheetsLoading && (
+                  <>
+                    {/* Sub-tabs das abas da planilha */}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
+                      {Object.values(SHEET_TABS).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setSheetsActiveTab(tab)}
+                          style={{
+                            padding: '0.3rem 0.85rem',
+                            borderRadius: '20px',
+                            border: '1px solid',
+                            cursor: 'pointer',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            transition: 'all 0.2s',
+                            background: sheetsActiveTab === tab ? 'var(--primary-color)' : 'transparent',
+                            color: sheetsActiveTab === tab ? 'white' : 'var(--text-secondary)',
+                            borderColor: sheetsActiveTab === tab ? 'var(--primary-color)' : 'var(--glass-border)',
+                          }}
+                        >
+                          {tab}
+                          {sheetsData[tab]?.length > 0 && (
+                            <span style={{ marginLeft: '0.4rem', background: sheetsActiveTab === tab ? 'rgba(255,255,255,0.3)' : '#e2e8f0', borderRadius: '10px', padding: '0 5px', fontSize: '0.7rem' }}>
+                              {sheetsData[tab].length}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tabela da aba selecionada */}
+                    {(sheetsData[sheetsActiveTab] || []).length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', background: '#f8f9fa', borderRadius: '0.5rem' }}>
+                        Nenhum dado arquivado nesta aba ainda.
+                      </div>
+                    ) : (
+                      <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              {Object.keys(sheetsData[sheetsActiveTab][0]).map(col => (
+                                <th key={col}>{col}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sheetsData[sheetsActiveTab].map((row, i) => (
+                              <tr key={i}>
+                                {Object.values(row).map((val, j) => (
+                                  <td key={j} style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)
+                                      ? new Date(val).toLocaleDateString('pt-BR')
+                                      : typeof val === 'number' && Object.keys(sheetsData[sheetsActiveTab][0])[j]?.toLowerCase().includes('valor')
+                                        ? `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                        : String(val ?? '')}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           );
