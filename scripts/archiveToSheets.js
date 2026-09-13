@@ -110,6 +110,11 @@ function arquivarPedidosVitrine() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaPedidos);
     if (!sheet) { Logger.log("Aba Pedidos vitrine nao encontrada!"); return; }
 
+    // Busca Customers para preencher e-mail, cpf e endereço caso faltem no deal
+    const custResp = UrlFetchApp.fetch("https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/customers", { muteHttpExceptions: true });
+    const custData = JSON.parse(custResp.getContentText());
+    const customers = (custData.documents || []).map(d => parseFirestoreDoc(d));
+
     data.documents.forEach(doc => {
       const deal = parseFirestoreDoc(doc);
       if (deal.source !== 'vitrine') return;
@@ -122,17 +127,29 @@ function arquivarPedidosVitrine() {
         itensStr = prods.map(p => p.quantity + "x " + p.name + " (SKU: " + p.sku + ")").join(" | ");
       } catch(err) { itensStr = String(deal.products || ''); }
 
+      // Tenta achar o cliente pelo nome ou CPF associado
+      let customer = null;
+      if (deal.customerCpf) {
+        customer = customers.find(c => c.cpf === deal.customerCpf);
+      } else if (deal.client) {
+        customer = customers.find(c => c.name === deal.client);
+      }
+
+      const email = deal.email || (customer ? customer.email : '');
+      const cpf = deal.cpf || deal.customerCpf || (customer ? customer.cpf : '');
+      const address = deal.address || (customer ? [customer.address, customer.neighborhood, customer.city].filter(Boolean).join(', ') : '');
+
       // Separa data e hora do timestamp ISO
       const dataHora  = deal.date || new Date().toISOString();
-      const localComp = deal.address || deal.location || 'Online (Vitrine)';
+      const localComp = address || deal.location || 'Online (Vitrine)';
 
       sheet.appendRow([
         dataHora,                                          // DATA E HORA DO PEDIDO
         deal.client         || '',                         // USUARIO
-        deal.email          || '',                         // EMAIL
-        deal.cpf            || '',                         // CPF
-        deal.address        || '',                         // ENDEREÇO
-        deal.phone          || '',                         // N° DE TEEFONE
+        email,                                             // EMAIL
+        cpf,                                               // CPF
+        address,                                           // ENDEREÇO
+        deal.phone || (customer ? customer.phone : '') || '', // N° DE TEEFONE
         itensStr,                                          // ITEN COMPRADO
         deal.salesperson    || '',                         // VENDEOR ESCLHIDO
         deal.shippingStatus || deal.deliveryDays || '',    // PRAZO DE ENTREGA
