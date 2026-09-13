@@ -696,7 +696,7 @@ function App() {
     setNewOrder({ ...newOrder, products: updatedProducts, totalValue: total });
   };
 
-  const handleAddOrder = (e) => {
+  const handleAddOrder = async (e) => {
     e.preventDefault();
     if (newOrder.products.length === 0) {
       alert('Adicione pelo menos um produto ao pedido!');
@@ -1892,7 +1892,6 @@ function App() {
                         >
                           Excel (tudo)
                         </button>
-                        <button
                 )}
               </div>
             </div>
