@@ -1692,28 +1692,19 @@ function App() {
                         </div>
                       </div>
 
-                      <h4 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Vendas por vendedor</h4>
-                      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', height: '100px', gap: '0.5rem' }}>
-                        {(() => {
-                          const salesBySeller = deals.filter(d => d.status === 'Ganho').reduce((acc, d) => {
-                            const seller = d.salesperson || 'Admin';
-                            if (!acc[seller]) acc[seller] = 0;
-                            acc[seller] += d.value;
-                            return acc;
-                          }, {});
-                          const sellersArray = Object.keys(salesBySeller).map(s => ({ name: s, value: salesBySeller[s] }));
-                          if (sellersArray.length === 0) return <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Nenhuma venda registrada.</p>;
-                          const maxSellerValue = Math.max(...sellersArray.map(s => s.value));
-                          
-                          return sellersArray.map((seller, idx) => (
-                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1 }} title={`R$ ${seller.value.toFixed(2)}`}>
-                              <div style={{ display: 'flex', gap: '0.2rem', alignItems: 'flex-end', height: '100%' }}>
-                                <div style={{ width: '25px', height: `${(seller.value / maxSellerValue) * 100}%`, background: 'var(--primary-color)', borderRadius: '2px 2px 0 0' }}></div>
-                              </div>
-                              <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>{seller.name.split(' ')[0]}</span>
-                            </div>
-                          ));
-                        })()}
+                      <h4 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Vendas por Vendedor</h4>
+                      <div style={{ width: '100%', height: '150px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={salesBySalespersonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} style={{ fontSize: '0.75rem', fontWeight: 'bold' }} />
+                            <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val/1000}k`} style={{ fontSize: '0.75rem' }} />
+                            <Tooltip formatter={(value) => [`R$ ${value.toFixed(2)}`, 'Vendas']} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                            <Bar dataKey="vendas" fill="var(--primary-color)" radius={[4, 4, 0, 0]} barSize={30}>
+                              <LabelList dataKey="vendas" position="top" formatter={(val) => `R$${val.toFixed(0)}`} style={{ fontSize: '0.7rem', fill: 'var(--text-secondary)' }} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   </div>
@@ -1907,23 +1898,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Vendas por Vendedor Chart */}
-                <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '300px' }}>
-                  <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-primary)' }}>Vendas por Vendedor (Ganhas)</h3>
-                  <div style={{ flex: 1, width: '100%', minHeight: '200px' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={salesBySalespersonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} style={{ fontSize: '0.8rem', fontWeight: 'bold' }} />
-                        <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val/1000}k`} style={{ fontSize: '0.8rem' }} />
-                        <Tooltip formatter={(value) => [`R$ ${value.toFixed(2)}`, 'Vendas']} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                        <Bar dataKey="vendas" fill="var(--primary-color)" radius={[4, 4, 0, 0]} barSize={40}>
-                          <LabelList dataKey="vendas" position="top" formatter={(val) => `R$${val}`} style={{ fontSize: '0.75rem', fill: 'var(--text-secondary)' }} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
               </div>
               </div>
             
