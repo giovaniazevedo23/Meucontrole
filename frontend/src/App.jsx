@@ -38,7 +38,7 @@ function App() {
   const [offerFormData, setOfferFormData] = useState({ itemId: '', offerPrice: 0, hours: 24 });
   const [coupons, setCoupons] = useState([]);
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
-  const [newCoupon, setNewCoupon] = useState({ code: '', discount: 10, expireDays: 30, usageLimit: '' });
+  const [newCoupon, setNewCoupon] = useState({ code: '', discount: 10, expireDate: '', minPurchaseValue: 0, usageLimit: '' });
   
   const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3 });
   const [newOrder, setNewOrder] = useState({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
@@ -547,19 +547,25 @@ function App() {
     if (!newCoupon.code) return;
     
     try {
-      const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + Number(newCoupon.expireDays));
+      let finalExpireDate = new Date();
+      if (newCoupon.expireDate) {
+        finalExpireDate = new Date(newCoupon.expireDate);
+        finalExpireDate.setHours(23, 59, 59, 999);
+      } else {
+        finalExpireDate.setDate(finalExpireDate.getDate() + 30);
+      }
       
       await addDoc(collection(db, 'coupons'), {
         code: newCoupon.code.toUpperCase(),
         discount: Number(newCoupon.discount),
-        expireDate: expireDate.toISOString(),
+        expireDate: finalExpireDate.toISOString(),
+        minPurchaseValue: newCoupon.minPurchaseValue ? Number(newCoupon.minPurchaseValue) : 0,
         usageLimit: newCoupon.usageLimit ? Number(newCoupon.usageLimit) : null,
         usedCount: 0,
         companyCnpj: currentUser.companyCnpj
       });
       setIsCouponModalOpen(false);
-      setNewCoupon({ code: '', discount: 10, expireDays: 30, usageLimit: '' });
+      setNewCoupon({ code: '', discount: 10, expireDate: '', minPurchaseValue: 0, usageLimit: '' });
       alert('Cupom cadastrado com sucesso!');
     } catch (e) {
       console.error(e);
@@ -1228,9 +1234,9 @@ function App() {
           <div 
             style={{ position: 'relative', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center' }} 
             onClick={() => setShowNotifications(true)}
-            title="Notificações"
+            title="Configurações e Alertas"
           >
-            <span style={{ fontSize: '1.5rem' }}>🔔</span>
+            <span style={{ fontSize: '1.5rem' }}>⚙️</span>
             {lowStockAlertsCount > 0 && (
               <span style={{ position: 'absolute', top: '0', right: '0', background: 'var(--danger)', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 'bold' }}>
                 {lowStockAlertsCount}
@@ -1332,7 +1338,7 @@ function App() {
       <main className="main-content">
         <nav className="glass-panel" style={{ display: 'flex', gap: '1rem', padding: '1rem 1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', overflowX: 'auto' }}>
           <button className={activeTab === 'produtos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('produtos')} style={activeTab !== 'produtos' ? { color: 'var(--text-primary)' } : {}}>
-            Produtos (Catálogo)
+            Produtos
           </button>
           <button className={activeTab === 'estoque' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('estoque')} style={activeTab !== 'estoque' ? { color: 'var(--text-primary)' } : {}}>
             Estoque Atual
@@ -1347,22 +1353,13 @@ function App() {
             Compras
           </button>
           <button className={activeTab === 'crm' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('crm')} style={activeTab !== 'crm' ? { color: 'var(--text-primary)' } : {}}>
-            CRM & Vendas
+            Vendas
           </button>
-          <button className={activeTab === 'pedidos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('pedidos')} style={activeTab !== 'pedidos' ? { color: 'var(--text-primary)', position: 'relative' } : { position: 'relative' }}>
+          <button className={activeTab === 'pedidos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('pedidos')} style={activeTab !== 'pedidos' ? { color: 'var(--text-primary)' } : {}}>
             Pedidos Solicitados
-            {hasUnreadAdmin ? (
-              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--danger)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '50%' }}>
-                !
-              </span>
-            ) : deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido').length > 0 ? (
-              <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'var(--danger)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '50%' }}>
-                {deals.filter(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido').length}
-              </span>
-            ) : null}
           </button>
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
-            Lojas (Empresas)
+            Lojas
           </button>
           
         </nav>
@@ -1896,119 +1893,6 @@ function App() {
                           Excel (tudo)
                         </button>
                         <button
-                          className="btn-secondary"
-                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
-                          onClick={() => exportToPdf(
-                            sheetsData[sheetsActiveTab] || [],
-                            sheetsActiveTab,
-                            sheetsActiveTab
-                          )}
-                        >
-                          PDF
-                        </button>
-                      </>
-                    )}
-                    <button
-                      className="btn-primary"
-                      style={{ fontSize: '0.85rem', padding: '0.45rem 1rem' }}
-                      onClick={handleLoadSheets}
-                      disabled={sheetsLoading}
-                    >
-                      {sheetsLoading ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <img src="/timer_icon.png" alt="Carregando" style={{ width: '16px', height: '16px' }} />
-                          Carregando...
-                        </div>
-                      ) : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
-                    </button>
-                    {lastSyncTime && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '0.5rem' }}>
-                        Última atualização: {lastSyncTime}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {!sheetsLoaded && !sheetsLoading && (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(26,115,232,0.04)', borderRadius: '0.75rem', border: '1px dashed rgba(26,115,232,0.2)' }}>
-                    <p style={{ margin: 0, fontWeight: 500 }}>Clique em "Carregar Planilhas" para buscar os dados arquivados do Google Sheets</p>
-                  </div>
-                )}
-
-                {sheetsLoading && (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                    <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'center' }}>
-                      <img src="/clock.png" alt="Carregando" style={{ width: '32px', height: '32px' }} />
-                    </div>
-                    <p style={{ margin: 0 }}>Buscando dados da planilha...</p>
-                  </div>
-                )}
-
-                {sheetsLoaded && !sheetsLoading && (
-                  <>
-                    {/* Sub-tabs das abas da planilha */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                      {Object.values(SHEET_TABS).map(tab => (
-                        <button
-                          key={tab}
-                          onClick={() => setSheetsActiveTab(tab)}
-                          style={{
-                            padding: '0.3rem 0.85rem',
-                            borderRadius: '20px',
-                            border: '1px solid',
-                            cursor: 'pointer',
-                            fontSize: '0.78rem',
-                            fontWeight: 600,
-                            transition: 'all 0.2s',
-                            background: sheetsActiveTab === tab ? 'var(--primary-color)' : 'transparent',
-                            color: sheetsActiveTab === tab ? 'white' : 'var(--text-secondary)',
-                            borderColor: sheetsActiveTab === tab ? 'var(--primary-color)' : 'var(--glass-border)',
-                          }}
-                        >
-                          {tab}
-                          {sheetsData[tab]?.length > 0 && (
-                            <span style={{ marginLeft: '0.4rem', background: sheetsActiveTab === tab ? 'rgba(255,255,255,0.3)' : '#e2e8f0', borderRadius: '10px', padding: '0 5px', fontSize: '0.7rem' }}>
-                              {sheetsData[tab].length}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Tabela da aba selecionada */}
-                    {(sheetsData[sheetsActiveTab] || []).length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', background: '#f8f9fa', borderRadius: '0.5rem' }}>
-                        Nenhum dado arquivado nesta aba ainda.
-                      </div>
-                    ) : (
-                      <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                        <table>
-                          <thead>
-                            <tr>
-                              {Object.keys(sheetsData[sheetsActiveTab][0]).map(col => (
-                                <th key={col}>{col}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sheetsData[sheetsActiveTab].map((row, i) => (
-                              <tr key={i}>
-                                {Object.values(row).map((val, j) => (
-                                  <td key={j} style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)
-                                      ? new Date(val).toLocaleDateString('pt-BR')
-                                      : typeof val === 'number' && Object.keys(sheetsData[sheetsActiveTab][0])[j]?.toLowerCase().includes('valor')
-                                        ? `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                                        : String(val ?? '')}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
                 )}
               </div>
             </div>
@@ -2102,7 +1986,7 @@ function App() {
                         ) : (
                           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>Fixo: Do mês atual</span>
-                            <span style={{ fontSize: '0.8rem', cursor: 'pointer', color: 'var(--primary-color)' }} onClick={() => setIsEditingGoal(true)}>✏️ Editar</span>
+                            <span style={{ fontSize: '0.8rem', cursor: 'pointer', color: 'var(--primary-color)' }} onClick={() => setIsEditingGoal(true)}>Editar</span>
                           </div>
                         )}
                       </div>
@@ -2248,7 +2132,7 @@ function App() {
                             <h4 style={{ margin: 0 }}>Clientes aniversariantes</h4>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                               <span style={{ fontSize: '0.7rem', background: '#e2e8f0', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>Do dia atual</span>
-                              <button onClick={() => setIsBirthdayMessageModalOpen(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}>⚙️ Configurar</button>
+                              <button onClick={() => setIsBirthdayMessageModalOpen(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}>Modelar</button>
                             </div>
                           </div>
                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -2821,13 +2705,21 @@ function App() {
                 />
               </div>
               <div className="form-group">
-                <label>Validade (Dias)</label>
+                <label>Data de Validade (Opcional)</label>
+                <input 
+                  type="date" 
+                  value={newCoupon.expireDate}
+                  onChange={e => setNewCoupon({...newCoupon, expireDate: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label>Valor Mínimo de Compra (R$)</label>
                 <input 
                   type="number" 
-                  required 
-                  min="1"
-                  value={newCoupon.expireDays}
-                  onChange={e => setNewCoupon({...newCoupon, expireDays: e.target.value})}
+                  min="0"
+                  step="0.01"
+                  value={newCoupon.minPurchaseValue}
+                  onChange={e => setNewCoupon({...newCoupon, minPurchaseValue: e.target.value})}
                 />
               </div>
               <div className="form-group">
@@ -3268,10 +3160,8 @@ function App() {
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>Forma de Pagamento</label>
                   <select value={checkoutMethod} onChange={e => setCheckoutMethod(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>
-                    <option value="PIX">PIX</option>
+                    <option value="PIX">PIX (5% de desconto)</option>
                     <option value="Cartão de Crédito">Cartão de Crédito</option>
-                    <option value="Cartão de Débito">Cartão de Débito</option>
-                    <option value="Boleto">Boleto</option>
                   </select>
                 </div>
               </>
