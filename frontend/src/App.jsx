@@ -1490,27 +1490,29 @@ function App() {
 
         {activeTab === 'relatorios' && (() => {
           // Calculate ABC Curve data
-          const totalInventoryValue = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+          const totalSalesValue = items.reduce((sum, item) => sum + ((item.sold || 0) * item.price), 0);
           let accumulatedValue = 0;
           
           const abcItems = [...items]
-            .map(item => ({ ...item, totalValue: item.quantity * item.price }))
+            .map(item => ({ ...item, totalValue: (item.sold || 0) * item.price }))
             .sort((a, b) => b.totalValue - a.totalValue)
             .map(item => {
               accumulatedValue += item.totalValue;
-              const accumulatedPercentage = totalInventoryValue > 0 ? (accumulatedValue / totalInventoryValue) * 100 : 0;
+              const accumulatedPercentage = totalSalesValue > 0 ? (accumulatedValue / totalSalesValue) * 100 : 0;
               let curva = 'C';
               if (accumulatedPercentage <= 80) curva = 'A';
               else if (accumulatedPercentage <= 95) curva = 'B';
               
-              return { ...item, curva };
+              const isHighDemand = (item.sold || 0) > 0 && item.quantity > 0 && item.quantity <= 15;
+              
+              return { ...item, curva, isHighDemand };
             });
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {/* Curva ABC */}
               <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
-                <h3 style={{ marginBottom: '0.5rem' }}>Curva ABC (Por Valor em Estoque)</h3>
+                <h3 style={{ marginBottom: '0.5rem' }}>Curva ABC (Por Volume de Vendas)</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', marginTop: 0 }}>
                   Curva A (Top 80% do valor), Curva B (Próximos 15%), Curva C (Últimos 5%). Produtos da Curva A exigem atenção máxima!
                 </p>
@@ -1522,7 +1524,7 @@ function App() {
                         <th>Produto</th>
                         <th>SKU</th>
                         <th>Quantidade</th>
-                        <th>Valor Total</th>
+                        <th>Valor Vendido (Saídas)</th>
                         <th>Ação Recomendada</th>
                       </tr>
                     </thead>
@@ -1538,7 +1540,7 @@ function App() {
                               Curva {item.curva}
                             </span>
                           </td>
-                          <td>{item.name}</td>
+                          <td>{item.name} {item.isHighDemand && <span style={{ marginLeft: '0.5rem', background: '#ee4d2d', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>🔥 Últimas Unidades</span>}</td>
                           <td>{item.sku}</td>
                           <td>{item.quantity}</td>
                           <td><strong>R$ {item.totalValue.toFixed(2)}</strong></td>
