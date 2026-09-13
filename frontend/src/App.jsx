@@ -89,6 +89,10 @@ function App() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', dueDate: '', status: 'Pendente' });
 
+  const [devServices, setDevServices] = useState([]);
+  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
+  const [newDevService, setNewDevService] = useState({ title: '', value: '', dueDate: '', status: 'Pendente' });
+
   useEffect(() => {
     if (!currentUser || !currentUser.companyCnpj) {
       const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
@@ -120,6 +124,10 @@ function App() {
       setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubDev = onSnapshot(query(collection(db, 'devServices'), where('companyCnpj', '==', activeCnpj)), (snap) => {
+      setDevServices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
       setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -140,6 +148,7 @@ function App() {
       unsubCoupons();
       unsubCustomers();
       unsubExpenses();
+      unsubDev();
     };
   }, [currentUser]);
 
@@ -340,6 +349,40 @@ function App() {
   const handleDeleteCompany = async (id) => {
     await deleteDoc(doc(db, 'companies', id));
 
+  };
+
+  const handleAddDevService = async (e) => {
+    e.preventDefault();
+    if (!newDevService.title || !newDevService.value || !newDevService.dueDate) {
+      alert("Preencha todos os campos.");
+      return;
+    }
+    const activeCnpj = currentUser?.companyCnpj || currentUser?.cnpj || '00.000.000/0001-00';
+    try {
+      await addDoc(collection(db, 'devServices'), {
+        title: newDevService.title,
+        value: Number(newDevService.value),
+        dueDate: newDevService.dueDate,
+        status: newDevService.status,
+        companyCnpj: activeCnpj,
+        createdAt: new Date().toISOString()
+      });
+      setIsDevModalOpen(false);
+      setNewDevService({ title: '', value: '', dueDate: '', status: 'Pendente' });
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao adicionar serviço.');
+    }
+  };
+
+  const deleteDevService = async (id) => {
+    if (window.confirm("Deseja realmente excluir este serviço?")) {
+      await deleteDoc(doc(db, 'devServices', id));
+    }
+  };
+
+  const handleUpdateDevStatus = async (id, newStatus) => {
+    await updateDoc(doc(db, 'devServices', id), { status: newStatus });
   };
 
   const handleUpdateQuantity = async (id, delta, type = delta > 0 ? 'ENTRADA' : 'SAIDA', reason = delta > 0 ? 'Entrada manual' : 'Saída manual') => {
@@ -749,6 +792,48 @@ function App() {
       console.error(err);
       alert('Erro ao enviar mensagem.');
     }
+  };
+
+  const archiveDeal = async (dealId) => {
+    if (!window.confirm('Deseja arquivar este pedido? Ele será removido do painel principal, mas poderá ser exportado no histórico.')) return;
+    try {
+      await updateDoc(doc(db, 'deals', dealId), { archived: true });
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao arquivar pedido.');
+    }
+  };
+
+  const exportToExcel = () => {
+    const data = deals.filter(d => d.archived);
+    if (data.length === 0) {
+      alert("Nenhum registro arquivado para exportar.");
+      return;
+    }
+    const headers = ["Data", "Protocolo", "Cliente", "Telefone", "Vendedor", "Status", "Valor (R$)", "Produtos"];
+    const csvRows = [headers.join(',')];
+    data.forEach(d => {
+      const prods = d.products ? d.products.map(p => `${p.quantity}x ${p.name}`).join(' | ') : '';
+      const row = [
+        new Date(d.date).toLocaleDateString('pt-BR'),
+        `"${d.id.slice(-6)}"`,
+        `"${d.client}"`,
+        `"${d.phone || ''}"`,
+        `"${d.salesperson || ''}"`,
+        `"${d.status}"`,
+        d.value.toFixed(2),
+        `"${prods}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "historico_crm_arquivados.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const advanceDealStatus = async (dealId, currentStatus) => {
@@ -1213,6 +1298,9 @@ function App() {
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
             Lojas (Empresas)
           </button>
+          <button className={activeTab === 'programacao' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('programacao')} style={activeTab !== 'programacao' ? { color: 'var(--text-primary)' } : {}}>
+            Serviços de Programação
+          </button>
         </nav>
 
         {activeTab === 'pedidos' && (
@@ -1220,43 +1308,89 @@ function App() {
             <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Pedidos Solicitados (Vitrine)</h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-              {deals.filter(d => d.source === 'vitrine').length === 0 ? (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Nenhum pedido da vitrine no momento.</div>
-              ) : (
-                deals.filter(d => d.source === 'vitrine').sort((a,b) => new Date(b.date) - new Date(a.date)).map(deal => (
-                  <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', borderLeft: '4px solid var(--primary-color)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleString()}</span>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
-                    </div>
-                    <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-color)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
-                    
-                    <div style={{ marginBottom: '1rem' }}>
-                      <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
-                      <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
-                      {deal.products && deal.products.length > 0 && (
-                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
-                          <strong style={{ color: '#333' }}>Itens:</strong> {deal.products.map(p => `${p.quantity}x ${p.name}`).join(', ')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div>
+                <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>Em Andamento (Sem Atendimento)</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                  {deals.filter(d => d.source === 'vitrine' && d.shippingStatus !== 'Entregue').length === 0 ? (
+                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', background: '#f8f9fa', borderRadius: '8px' }}>Nenhum pedido em andamento.</div>
+                  ) : (
+                    deals.filter(d => d.source === 'vitrine' && d.shippingStatus !== 'Entregue').sort((a,b) => new Date(b.date) - new Date(a.date)).map(deal => (
+                      <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', borderLeft: '4px solid var(--warning)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleString()}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
                         </div>
-                      )}
-                    </div>
+                        <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary-color)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Rastreio: {deal.shippingStatus || 'Aguardando'}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
+                          {deal.products && deal.products.length > 0 && (
+                            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
+                              <strong style={{ color: '#333' }}>Itens:</strong> {deal.products.map(p => `${p.quantity}x ${p.name}`).join(', ')}
+                            </div>
+                          )}
+                        </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <button className="btn-primary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
-                        Abrir Atendimento (Chat)
-                        {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
-                          <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
-                        )}
-                      </button>
-                      <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setTrackingModal({ dealId: deal.id, msg: '' })}>
-                        Atualizar Rastreio
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button className="btn-primary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
+                            Abrir Atendimento (Chat)
+                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
+                              <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
+                            )}
+                          </button>
+                          <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setTrackingModal({ dealId: deal.id, msg: '' })}>
+                            Atualizar Rastreio
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Pedidos Finalizados (Entregues)</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                  {deals.filter(d => d.source === 'vitrine' && d.shippingStatus === 'Entregue').length === 0 ? (
+                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', background: '#f8f9fa', borderRadius: '8px' }}>Nenhum pedido finalizado.</div>
+                  ) : (
+                    deals.filter(d => d.source === 'vitrine' && d.shippingStatus === 'Entregue').sort((a,b) => new Date(b.date) - new Date(a.date)).map(deal => (
+                      <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', borderLeft: '4px solid var(--success)', opacity: 0.85 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleString()}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>Protocolo #{deal.id.slice(-6)}</span>
+                        </div>
+                        <h3 style={{ margin: '0 0 0.5rem 0' }}>{deal.client}</h3>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--success)', marginBottom: '1rem' }}>R$ {deal.value.toFixed(2)}</div>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Rastreio: {deal.shippingStatus}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
+                          {deal.products && deal.products.length > 0 && (
+                            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
+                              <strong style={{ color: '#333' }}>Itens:</strong> {deal.products.map(p => `${p.quantity}x ${p.name}`).join(', ')}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button className="btn-secondary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
+                            Ver Atendimento (Chat)
+                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
+                              <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -1267,10 +1401,10 @@ function App() {
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button className="btn-secondary" onClick={() => setIsOfferModalOpen(true)} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
-                  ⚡ Adicionar Oferta
+                  Adicionar Oferta
                 </button>
                 <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: 'var(--primary-color)' }}>
-                  🎟️ Adicionar Cupom
+                  Adicionar Cupom
                 </button>
                 <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
                   + Adicionar Produto
@@ -1314,7 +1448,7 @@ function App() {
                           setIsEditModalOpen(true); 
                         }}
                       >
-                        ✏️ Editar
+                        Editar
                       </button>
                     </div>
                   </div>
@@ -1845,16 +1979,31 @@ function App() {
                             <h4 style={{ margin: 0 }}>Top clientes (Mês)</h4>
                           </div>
                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                            {deals.filter(d => d.status === 'Ganho').sort((a,b) => b.value - a.value).slice(0,4).map((d, i) => (
-                              <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <div style={{ width: '25px', height: '25px', borderRadius: '50%', background: i===0?'#fbbf24':i===1?'#9ca3af':i===2?'#b45309':'#e2e8f0', color: i===3?'#000':'#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{i+1}</div>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{d.client}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Comprou R$ {Number(d.value).toFixed(2)}</div>
-                                </div>
-                              </li>
-                            ))}
-                            {deals.filter(d => d.status === 'Ganho').length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Nenhum ganho registrado.</p>}
+                            {(() => {
+                              const ganhoDeals = deals.filter(d => d.status === 'Ganho');
+                              const clientTotals = {};
+                              ganhoDeals.forEach(d => {
+                                const clientName = d.client || 'Desconhecido';
+                                if (!clientTotals[clientName]) clientTotals[clientName] = 0;
+                                clientTotals[clientName] += Number(d.value);
+                              });
+                              const topClients = Object.entries(clientTotals)
+                                .sort((a, b) => b[1] - a[1])
+                                .slice(0, 4)
+                                .map(entry => ({ client: entry[0], value: entry[1] }));
+                              
+                              if (topClients.length === 0) return <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Nenhum ganho registrado.</p>;
+                              
+                              return topClients.map((d, i) => (
+                                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                                  <div style={{ width: '25px', height: '25px', borderRadius: '50%', background: i===0?'#fbbf24':i===1?'#9ca3af':i===2?'#b45309':'#e2e8f0', color: i===3?'#000':'#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{i+1}</div>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{d.client}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Comprou R$ {Number(d.value).toFixed(2)}</div>
+                                  </div>
+                                </li>
+                              ));
+                            })()}
                           </ul>
                         </div>
                         
@@ -1963,12 +2112,17 @@ function App() {
               </div>
               </div>
             
-            <h3 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>Pipeline (Kanban)</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Pipeline (Kanban)</h3>
+              <button className="btn-secondary" onClick={exportToExcel} style={{ color: 'var(--primary-color)', borderColor: 'var(--primary-color)' }}>
+                📥 Exportar Histórico (Arquivados)
+              </button>
+            </div>
             <div className="kanban-board">
               {['Prospecção', 'Qualificação', 'Proposta', 'Negociação', 'Ganho', 'Perdido'].map(status => (
                 <div key={status} className="kanban-column" style={status === 'Ganho' ? { borderTop: '4px solid var(--success)' } : status === 'Perdido' ? { borderTop: '4px solid var(--danger)' } : { borderTop: '4px solid var(--primary-color)' }}>
                   <h3 style={{ borderBottom: 'none' }}>{status}</h3>
-                  {deals.filter(d => d.status === status).map(deal => (
+                  {deals.filter(d => d.status === status && !d.archived).map(deal => (
                     <div 
                       key={deal.id} 
                       className="kanban-card" 
@@ -2023,6 +2177,13 @@ function App() {
                           </button>
                         </div>
                       )}
+                      {(status === 'Ganho' || status === 'Perdido') && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                          <button className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }} onClick={(e) => { e.stopPropagation(); archiveDeal(deal.id); }}>
+                            📦 Arquivar Negócio
+                          </button>
+                        </div>
+                      )}
                       {status === 'Ganho' && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginTop: '0.5rem' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 'bold' }}>
@@ -2042,7 +2203,7 @@ function App() {
                       )}
                     </div>
                   ))}
-                  {deals.filter(d => d.status === status).length === 0 && (
+                  {deals.filter(d => d.status === status && !d.archived).length === 0 && (
                     <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '1rem' }}>Vazio</p>
                   )}
                 </div>
@@ -2124,6 +2285,105 @@ function App() {
           </table>
         </div>
       </div>
+    )}
+
+    {activeTab === 'programacao' && (
+      <>
+        <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Controle de Serviços (Programação)</h2>
+          <button className="btn-primary" onClick={() => setIsDevModalOpen(true)}>
+            + Adicionar Serviço
+          </button>
+        </div>
+
+        <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+          <div className="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Descrição / Título</th>
+                  <th>Valor</th>
+                  <th>Vencimento</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {devServices.length > 0 ? (
+                  devServices.map(svc => (
+                    <tr key={svc.id}>
+                      <td>{svc.title}</td>
+                      <td style={{ fontWeight: 'bold' }}>R$ {Number(svc.value).toFixed(2)}</td>
+                      <td>{new Date(svc.dueDate).toLocaleDateString('pt-BR')}</td>
+                      <td>
+                        <span style={{ 
+                          padding: '0.25rem 0.5rem', 
+                          borderRadius: '4px', 
+                          fontSize: '0.8rem',
+                          background: svc.status === 'Pago' ? '#dcfce7' : '#fee2e2',
+                          color: svc.status === 'Pago' ? '#166534' : '#991b1b'
+                        }}>
+                          {svc.status}
+                        </span>
+                      </td>
+                      <td style={{ display: 'flex', gap: '0.5rem' }}>
+                        {svc.status === 'Pendente' && (
+                          <button className="btn-secondary" style={{ color: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => handleUpdateDevStatus(svc.id, 'Pago')}>
+                            Marcar Pago
+                          </button>
+                        )}
+                        {svc.status === 'Pago' && (
+                          <button className="btn-secondary" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => handleUpdateDevStatus(svc.id, 'Pendente')}>
+                            Desfazer
+                          </button>
+                        )}
+                        <button className="btn-secondary" onClick={() => deleteDevService(svc.id)}>Excluir</button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>Nenhum serviço registrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {isDevModalOpen && (
+          <div className="modal-overlay" onClick={() => setIsDevModalOpen(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+              <div className="modal-header">
+                <h2>Novo Serviço (Programação)</h2>
+                <button className="close-btn" onClick={() => setIsDevModalOpen(false)}>×</button>
+              </div>
+              <form onSubmit={handleAddDevService} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                <div className="form-group">
+                  <label>Título / Descrição</label>
+                  <input type="text" required value={newDevService.title} onChange={e => setNewDevService({...newDevService, title: e.target.value})} placeholder="Ex: Criação do PDV Online" />
+                </div>
+                <div className="form-group">
+                  <label>Valor (R$)</label>
+                  <input type="number" step="0.01" min="0" required value={newDevService.value} onChange={e => setNewDevService({...newDevService, value: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Data de Vencimento</label>
+                  <input type="date" required value={newDevService.dueDate} onChange={e => setNewDevService({...newDevService, dueDate: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={newDevService.status} onChange={e => setNewDevService({...newDevService, status: e.target.value})}>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Pago">Pago</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>Salvar Serviço</button>
+              </form>
+            </div>
+          </div>
+        )}
+      </>
     )}
       </main>
 
@@ -3436,7 +3696,7 @@ function App() {
         width: '100%',
         background: 'transparent'
       }}>
-        © 2026 Direitos Reservados - Feito com ❤️ pela equipe GESTE
+        © 2026 Direitos Reservados GESTE
       </footer>
     </div>
   );
