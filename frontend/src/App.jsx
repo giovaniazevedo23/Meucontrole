@@ -1111,6 +1111,11 @@ function App() {
                     <div style={{ marginBottom: '1rem' }}>
                       <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
                       <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
+                      {deal.products && deal.products.length > 0 && (
+                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
+                          <strong style={{ color: '#333' }}>Itens:</strong> {deal.products.map(p => `${p.quantity}x ${p.name}`).join(', ')}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
