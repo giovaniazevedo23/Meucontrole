@@ -1641,6 +1641,28 @@ function App() {
                 <button className={movementFilter === 'SAIDA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('SAIDA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>↑ Saídas</button>
                 <button className={movementFilter === 'PERDA' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('PERDA')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Perdas/Avarias</button>
                 <button className={movementFilter === 'CLIENTE' ? 'btn-primary' : 'btn-secondary'} onClick={() => setMovementFilter('CLIENTE')} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Clientes (Vendas)</button>
+                
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("Isso irá restaurar movimentações antigas que estavam sem CNPJ. Deseja continuar?")) return;
+                    try {
+                      const allMovsSnap = await getDocs(collection(db, 'movements'));
+                      const activeCnpj = currentUser?.companyCnpj || currentUser?.cnpj || '00.000.000/0001-00';
+                      let count = 0;
+                      allMovsSnap.forEach(docSnap => {
+                        const m = docSnap.data();
+                        if (!m.companyCnpj) {
+                          setDoc(doc(db, 'movements', docSnap.id), { ...m, companyCnpj: activeCnpj });
+                          count++;
+                        }
+                      });
+                      alert(`${count} movimentações antigas foram restauradas!`);
+                    } catch(e) { alert("Erro ao restaurar: " + e.message); }
+                  }} 
+                  style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', background: '#eab308', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⚠️ Restaurar Antigas
+                </button>
               </div>
             </div>
             
@@ -1894,7 +1916,7 @@ function App() {
                     >
                       {sheetsLoading ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <img src="/clock.png" alt="Carregando" style={{ width: '16px', height: '16px' }} />
+                          <img src="/timer_icon.png" alt="Carregando" style={{ width: '16px', height: '16px' }} />
                           Carregando...
                         </div>
                       ) : sheetsLoaded ? 'Atualizar' : 'Carregar Planilhas'}
