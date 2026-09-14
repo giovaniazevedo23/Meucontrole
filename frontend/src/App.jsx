@@ -119,8 +119,25 @@ function App() {
 
     const activeCnpj = currentUser.companyCnpj || currentUser.cnpj || '00.000.000/0001-00';
     const itemsQ = query(collection(db, 'items'), where('companyCnpj', '==', activeCnpj));
-    const unsubItems = onSnapshot(itemsQ, (snap) => {
-      setItems(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubItems = onSnapshot(itemsQ, async (snap) => {
+      const allItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Auto-expire offers: if offerEndsAt has passed, restore original price
+      for (const item of allItems) {
+        if (item.isOffer && item.offerEndsAt && new Date(item.offerEndsAt).getTime() < Date.now()) {
+          try {
+            await setDoc(doc(db, 'items', item.id), {
+              ...item,
+              price: item.originalPrice || item.price,
+              isOffer: false,
+              offerEndsAt: null
+            });
+            item.price = item.originalPrice || item.price;
+            item.isOffer = false;
+            item.offerEndsAt = null;
+          } catch (e) { console.error('Erro ao expirar oferta:', e); }
+        }
+      }
+      setItems(allItems);
     });
 
     const dealsQ = query(collection(db, 'deals'), where('companyCnpj', '==', activeCnpj));
@@ -1236,7 +1253,7 @@ function App() {
             onClick={() => setShowNotifications(true)}
             title="Configurações e Alertas"
           >
-            <span style={{ fontSize: '1.5rem' }}>⚙️</span>
+            <span style={{ fontSize: '1.5rem' }}>🔔</span>
             {lowStockAlertsCount > 0 && (
               <span style={{ position: 'absolute', top: '0', right: '0', background: 'var(--danger)', color: 'white', borderRadius: '50%', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 'bold' }}>
                 {lowStockAlertsCount}
@@ -1461,6 +1478,9 @@ function App() {
             <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: '#00a650', borderColor: '#00a650' }}>
+                  🎟️ Adicionar Cupom
+                </button>
                 <button className="btn-secondary" onClick={() => setIsOfferModalOpen(true)} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
                   Adicionar Oferta
                 </button>
@@ -1959,7 +1979,7 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', margin: '2rem 0' }}>
                         <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '50%', background: `conic-gradient(var(--primary-color) ${(Number(salesGoal) > 0 ? (totalWonValue / Number(salesGoal)) * 100 : 0)}%, #e2e8f0 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                            {Number(salesGoal) > 0 ? Math.min(100, Math.round((totalWonValue / Number(salesGoal)) * 100)) : 0}%
+                            {Number(salesGoal) > 0 ? Math.min(100, ((totalWonValue / Number(salesGoal)) * 100)).toFixed(1) : 0}%
                           </div>
                         </div>
                         <div>
