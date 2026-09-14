@@ -1474,9 +1474,7 @@ function App() {
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
             Lojas
           </button>
-          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>
-            Configurações NFe
-          </button>
+          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>Sistemas</button>
         </nav>
 
 
@@ -2711,7 +2709,6 @@ function App() {
                 if (!s) {
                   return (
                     <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem', color: '#999' }}>
-                      <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🔍</div>
                       <h3 style={{ margin: '0 0 0.5rem 0' }}>Pesquisar Registros</h3>
                       <p>Digite o nome do cliente, CPF, ID do pedido ou NFe na barra de busca para encontrar os registros.</p>
                     </div>
@@ -2794,7 +2791,7 @@ function App() {
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
               <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)' }}>
-                <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>👤 Dados do Cliente</h3>
+                <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Dados do Cliente</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div><strong>Nome:</strong> {systemDetailsModal.client || 'Não informado'}</div>
                   <div><strong>CPF/CNPJ:</strong> {systemDetailsModal.cpf || systemDetailsModal.customerCpf || 'Não informado'}</div>
@@ -2806,7 +2803,7 @@ function App() {
               </div>
               
               <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)' }}>
-                <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>📄 Detalhes do Pedido</h3>
+                <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Detalhes do Pedido</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div><strong>Data e Hora:</strong> {systemDetailsModal.date ? new Date(systemDetailsModal.date).toLocaleString('pt-BR') : 'Não informado'}</div>
                   <div><strong>Origem:</strong> {systemDetailsModal.source === 'vitrine' ? 'Online (Vitrine Virtual)' : 'Venda Física (Balcão/CRM)'}</div>
@@ -2819,7 +2816,7 @@ function App() {
             </div>
 
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)', marginBottom: '2rem' }}>
-              <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>💰 Pagamento e Produtos</h3>
+              <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Pagamento e Produtos</h3>
               <div style={{ marginBottom: '1rem' }}>
                 <strong>Método de Pagamento:</strong> {systemDetailsModal.paymentMethod || systemDetailsModal.checkoutMethod || 'Não informado'}
               </div>
@@ -2863,7 +2860,7 @@ function App() {
             </div>
 
             <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '2rem' }}>
-              <button className="btn-secondary" onClick={() => window.print()} style={{ padding: '0.75rem 2rem' }}>🖨️ Imprimir Recibo</button>
+              <button className="btn-secondary" onClick={() => window.print()} style={{ padding: '0.75rem 2rem' }}>Imprimir Recibo</button>
               <button className="btn-primary" onClick={() => setSystemDetailsModal(null)} style={{ padding: '0.75rem 3rem' }}>Fechar</button>
             </div>
           </div>
