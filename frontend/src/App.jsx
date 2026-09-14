@@ -2063,11 +2063,10 @@ function App() {
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-    <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Lucro</h3>
-    <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setIsDevManagerOpen(true)}>+ Serviços de Programação</button>
-  </div>
+                          <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Lucro</h3>
+                        </div>
                         <div style={{ fontSize: '2.5rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↓ R$ {(totalWonValue - totalPaidExpenses).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          ↓ R$ {(totalWonValue - (totalPaidExpenses + totalPendingExpenses)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                           {receivedByPix > 0 && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '99px' }}>PIX: R$ {receivedByPix.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
