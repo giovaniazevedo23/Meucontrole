@@ -10,6 +10,7 @@ import { generateDanfeHtml } from './utils/danfeTemplate';
 import { fetchAllSheets, SHEET_TABS } from './utils/sheetsReader';
 import { exportToExcel, exportMultipleSheetsToExcel } from './utils/excelExport';
 import { exportToPdf } from './utils/pdfExport';
+import * as XLSX from 'xlsx';
 const getStatusDetails = (quantity) => {
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
   if (quantity <= 20) return { text: 'Estoque Baixo', className: 'status-low-stock' };
@@ -34,13 +35,13 @@ function App() {
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [editFormData, setEditFormData] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3 });
+  const [editFormData, setEditFormData] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3, allowInstallments: false, maxInstallments: 1, hasInterest: false, interestRate: 0 });
   const [offerFormData, setOfferFormData] = useState({ itemId: '', offerPrice: 0, hours: 24 });
   const [coupons, setCoupons] = useState([]);
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
   const [newCoupon, setNewCoupon] = useState({ code: '', discount: 10, expireDate: '', minPurchaseValue: 0, usageLimit: '' });
   
-  const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3 });
+  const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3, allowInstallments: false, maxInstallments: 1, hasInterest: false, interestRate: 0 });
   const [newOrder, setNewOrder] = useState({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
   const [orderProduct, setOrderProduct] = useState({ sku: '', name: '', quantity: 1, price: 0, location: '' });
   const [showNotifications, setShowNotifications] = useState(false);
@@ -371,6 +372,71 @@ function App() {
     }
   }, [activeTab, deals]);
 
+  const handleImportExcel = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, {type:'binary'});
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, {header:1});
+        
+        if (data.length < 2) return alert('Planilha vazia ou sem dados');
+        
+        const headers = data[0].map(h => typeof h === 'string' ? h.toLowerCase().trim() : '');
+        const skuIdx = headers.findIndex(h => h.includes('sku') || h.includes('código') || h.includes('codigo'));
+        const nameIdx = headers.findIndex(h => h.includes('produto') || h.includes('nome') || h.includes('desc'));
+        const priceIdx = headers.findIndex(h => h.includes('preço') || h.includes('preco') || h.includes('valor') || h.includes('custo'));
+        const qtyIdx = headers.findIndex(h => h.includes('qtd') || h.includes('quantidade') || h.includes('estoque'));
+        const locIdx = headers.findIndex(h => h.includes('local') || h.includes('setor'));
+        
+        if (skuIdx === -1 || nameIdx === -1) {
+          return alert('A planilha deve conter pelo menos as colunas de "Código/SKU" e "Produto/Nome".');
+        }
+
+        let count = 0;
+        const activeCnpj = currentUser?.companyCnpj || currentUser?.cnpj || '00.000.000/0001-00';
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          if(!row || row.length === 0 || !row[skuIdx]) continue;
+          
+          const sku = String(row[skuIdx]);
+          const name = String(row[nameIdx]);
+          const price = priceIdx !== -1 ? Number(String(row[priceIdx]).replace(',','.')) || 0 : 0;
+          const qty = qtyIdx !== -1 ? Number(row[qtyIdx]) || 0 : 0;
+          const loc = locIdx !== -1 ? String(row[locIdx]) : '';
+          
+          const existingItem = items.find(it => it.sku === sku);
+          if (!existingItem) {
+            const newItemId = Date.now().toString() + Math.random().toString();
+            await setDoc(doc(db, 'items', newItemId), {
+              id: newItemId,
+              sku,
+              name,
+              price,
+              quantity: qty,
+              location: loc,
+              category: 'Outros',
+              deliveryDays: 3,
+              freeShipping: false,
+              companyCnpj: activeCnpj,
+              lastMovementDate: new Date().toISOString()
+            });
+            count++;
+          }
+        }
+        alert(`${count} produtos novos importados com sucesso!`);
+        e.target.value = null;
+      } catch (err) {
+        alert('Erro ao processar planilha: ' + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const handleAddItem = async (e) => {
     e.preventDefault();
     const item = {
@@ -397,7 +463,7 @@ function App() {
     await setDoc(doc(db, 'movements', movement.id), movement);
 
     setIsModalOpen(false);
-    setNewItem({ name: '', sku: '', quantity: 0, location: '', price: 0 });
+    setNewItem({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3, allowInstallments: false, maxInstallments: 1, hasInterest: false, interestRate: 0 });
 
   };
 
@@ -1554,6 +1620,10 @@ function App() {
             <div className="toolbar glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
+                <input type="file" id="import-excel" accept=".xlsx,.csv" style={{display: 'none'}} onChange={handleImportExcel} />
+                <button className="btn-secondary" onClick={() => document.getElementById('import-excel').click()} style={{ color: '#00a650', borderColor: '#00a650' }}>
+                  📥 Importar Planilha
+                </button>
                 <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: '#00a650', borderColor: '#00a650' }}>
                   🎟️ Adicionar Cupom
                 </button>
@@ -1597,7 +1667,7 @@ function App() {
                         onClick={() => { 
                           setEditItem(item); 
                           setEditFormData({
-                            name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3
+                            name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3, allowInstallments: item.allowInstallments || false, maxInstallments: item.maxInstallments || 1, hasInterest: item.hasInterest || false, interestRate: item.interestRate || 0
                           });
                           setIsEditModalOpen(true); 
                         }}
@@ -1698,7 +1768,7 @@ function App() {
                       <button className="btn-icon" onClick={() => { 
                         setEditItem(item); 
                         setEditFormData({
-                          name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3
+                          name: item.name, sku: item.sku, quantity: item.quantity, location: item.location || '', price: item.price, category: item.category || 'Tecnologia', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || [], freeShipping: item.freeShipping || false, deliveryDays: item.deliveryDays || 3, allowInstallments: item.allowInstallments || false, maxInstallments: item.maxInstallments || 1, hasInterest: item.hasInterest || false, interestRate: item.interestRate || 0
                         });
                         setIsEditModalOpen(true); 
                       }} title="Ajuste Geral" style={{ fontSize: '1rem' }}>
@@ -2600,7 +2670,7 @@ function App() {
       {/* Add Modal */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel">
+          <div className="modal-content glass-panel" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h2>Novo Produto</h2>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>×</button>
@@ -2674,6 +2744,53 @@ function App() {
                 />
                 <label htmlFor="freeShipping" style={{ margin: 0 }}>Oferecer Frete Grátis</label>
               </div>
+              
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="allowInstallments"
+                  checked={newItem.allowInstallments}
+                  onChange={e => setNewItem({...newItem, allowInstallments: e.target.checked})}
+                  style={{ width: 'auto' }}
+                />
+                <label htmlFor="allowInstallments" style={{ margin: 0 }}>Permitir Parcelamento?</label>
+              </div>
+              {newItem.allowInstallments && (
+                <div style={{ background: '#f5f5f5', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+                  <div className="form-group">
+                    <label>Máximo de Parcelas</label>
+                    <input 
+                      type="number" 
+                      min="1" max="12"
+                      value={newItem.maxInstallments}
+                      onChange={e => setNewItem({...newItem, maxInstallments: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="hasInterest"
+                      checked={newItem.hasInterest}
+                      onChange={e => setNewItem({...newItem, hasInterest: e.target.checked})}
+                      style={{ width: 'auto' }}
+                    />
+                    <label htmlFor="hasInterest" style={{ margin: 0 }}>Cobrar Juros?</label>
+                  </div>
+                  {newItem.hasInterest && (
+                    <div className="form-group">
+                      <label>Taxa de Juros (%)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        min="0"
+                        value={newItem.interestRate}
+                        onChange={e => setNewItem({...newItem, interestRate: Number(e.target.value)})}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Fotos do Produto (Selecione 1 ou mais)</label>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
