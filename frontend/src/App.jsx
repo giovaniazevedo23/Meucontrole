@@ -1860,40 +1860,6 @@ function App() {
                 </div>
               </div>
 
-              {/* ===== PLANILHAS ARQUIVADAS ===== */}
-              <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', marginTop: '1.5rem', border: '1px solid rgba(26,115,232,0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <div>
-                    <h3 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      Planilhas Arquivadas (Google Sheets)
-                    </h3>
-                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      Dados históricos arquivados automaticamente pelo Apps Script
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {sheetsLoaded && (
-                      <>
-                        <button
-                          className="btn-secondary"
-                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
-                          onClick={() => exportToExcel(
-                            sheetsData[sheetsActiveTab] || [],
-                            sheetsActiveTab,
-                            sheetsActiveTab
-                          )}
-                        >
-                          Excel (aba atual)
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          style={{ color: 'var(--text-primary)', fontSize: '0.85rem', padding: '0.45rem 1rem' }}
-                          onClick={() => exportMultipleSheetsToExcel(sheetsData, 'Relatorio_Completo')}
-                        >
-                          Excel (tudo)
-                        </button>
-                )}
-              </div>
             </div>
           );
         })()}
