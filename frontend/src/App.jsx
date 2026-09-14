@@ -1030,32 +1030,58 @@ function App() {
 
     if (nfeSettings && nfeSettings.apiKey && nfeSettings.companyId) {
       try {
-        // AWS Lambda endpoint call
-        // const response = await fetch('https://your-api-gateway-url.com/emitir-nfe', { ... });
-        // Mocking the Lambda success response for demonstration until backend is deployed
-        console.log("Chamando AWS Lambda para emissão real com apiKey:", nfeSettings.apiKey);
-        const result = {
-          chaveAcesso: 'REAL_NFE_' + Math.floor(Math.random() * 900000000),
-          nfeId: 'nfe_' + Math.floor(Math.random() * 9000),
-          nfePdfUrl: 'https://nfe.io/dummy-pdf-url'
+        console.log("Chamando proxy NFE.io para emissão real...");
+        
+        // Payload básico adaptado para NFE.io (Product Invoices)
+        const nfePayload = {
+          buyer: {
+            name: nfeFormData.clienteNome || 'Consumidor Final',
+            taxRegistrationNumber: (nfeFormData.clienteCpfCnpj || '').replace(/\D/g, '') || '00000000000'
+          },
+          items: [
+            {
+              description: "Venda de produtos (" + (selectedNfeDeal?.document || selectedNfeDeal?.id || "Diversos") + ")",
+              unitAmount: Number(nfeFormData.valorTotal) || 0,
+              quantity: 1
+            }
+          ]
         };
+
+        const response = await fetch(`https://geste.onrender.com/nfe-api/v1/companies/${nfeSettings.companyId}/productinvoices`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': nfeSettings.apiKey
+          },
+          body: JSON.stringify(nfePayload)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          console.error("Erro da API NFE.io:", errData);
+          throw new Error('Falha na emissão da nota fiscal. Verifique as configurações de API.');
+        }
+
+        const result = await response.json();
+
         const updatedDeal = { 
           ...selectedNfeDeal, 
           nfeEmitted: true, 
-          chaveAcesso: result.chaveAcesso, 
-          nfeId: result.nfeId,
-          nfePdfUrl: result.nfePdfUrl,
+          chaveAcesso: result.accessKey || result.id || 'NFE_EMITIDA_' + Math.floor(Math.random() * 9000000), 
+          nfeId: result.id,
+          nfePdfUrl: result.pdfUrl || '', // URL pode demorar alguns instantes para processar na API real
           nfeData: nfeFormData,
           nfeNotification: true,
-          nfeSimulation: false // True NFe
+          nfeSimulation: false 
         };
         await setDoc(doc(db, 'deals', selectedNfeDeal.id), updatedDeal);
         setIsEmitindoNfe(false);
         setIsNfeModalOpen(false);
-        alert('Nota Fiscal real enviada para a SEFAZ via NFE.io com sucesso!');
+        alert('Nota Fiscal enviada para processamento no NFE.io com sucesso!');
         return;
       } catch (err) {
         console.error("Erro na emissão real, caindo para simulação", err);
+        alert("Erro ao conectar com NFE.io. Caindo para simulação (teste). " + err.message);
       }
     }
 
