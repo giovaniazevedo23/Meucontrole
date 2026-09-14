@@ -1659,10 +1659,6 @@ function App() {
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
             </span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', width: '1.25rem', height: '1.25rem', color: 'var(--text-secondary)', pointerEvents: 'none', zIndex: 1 }}>
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
             <input 
               type="text" 
               placeholder="Buscar por nome ou SKU..." 
@@ -2824,11 +2820,33 @@ function App() {
 
       </main>
 
-      {systemDetailsModal && (
+      {systemDetailsModal && (() => {
+        // Enrich deal data with spreadsheet data if available
+        const d = systemDetailsModal;
+        const sheetPedidos = (sheetsData && sheetsData['Pedidos vitrine']) || [];
+        const sheetVendas = (sheetsData && sheetsData['Vendas e controle']) || [];
+        const matchingSheet = sheetPedidos.find(row => 
+          (row['CPF'] && d.cpf && row['CPF'] === d.cpf) ||
+          (row['CPF'] && d.customerCpf && row['CPF'] === d.customerCpf) ||
+          (row['USUARIO'] && d.client && row['USUARIO'].toLowerCase() === d.client.toLowerCase())
+        ) || sheetVendas.find(row => 
+          (row['NOME DOS CLIENTES'] && d.client && row['NOME DOS CLIENTES'].toLowerCase() === d.client.toLowerCase())
+        );
+        const enriched = {
+          ...d,
+          email: d.email || d.customerEmail || (matchingSheet && matchingSheet['EMAIL']) || 'Não informado',
+          address: d.address || (matchingSheet && matchingSheet['ENDEREÇO']) || 'Não informado',
+          phone: d.phone || d.customerPhone || (matchingSheet && matchingSheet['N° DE TEEFONE']) || 'Não informado',
+          salesperson: d.salesperson || (matchingSheet && matchingSheet['VENDEDOR ESCOLHIDO']) || 'Nenhum / Auto-atendimento',
+          paymentMethod: d.paymentMethod || d.checkoutMethod || (matchingSheet && matchingSheet['METODO DE PAGAMENTO']) || 'Não informado',
+          maxDeliveryDays: d.maxDeliveryDays || (matchingSheet && matchingSheet['PRAZO DE ENTREGA']) || '',
+          shippingStatus: d.shippingStatus || (matchingSheet && matchingSheet['STATUS DE ENTREGA']) || 'Aguardando',
+        };
+        return (
         <div className="modal-overlay" style={{ zIndex: 1200 }}>
           <div className="modal-content glass-panel" style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-              <h2>Detalhes do Pedido #{systemDetailsModal.id.slice(-6).toUpperCase()}</h2>
+              <h2>Detalhes do Pedido #{(d.id || 'N/A').slice(-6).toUpperCase()}</h2>
               <button className="close-btn" onClick={() => setSystemDetailsModal(null)}>×</button>
             </div>
             
@@ -2836,24 +2854,24 @@ function App() {
               <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Dados do Cliente</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Nome:</strong> {systemDetailsModal.client || 'Não informado'}</div>
-                  <div><strong>CPF/CNPJ:</strong> {systemDetailsModal.cpf || systemDetailsModal.customerCpf || 'Não informado'}</div>
-                  <div><strong>E-mail:</strong> {systemDetailsModal.email || systemDetailsModal.customerEmail || 'Não informado'}</div>
-                  <div><strong>Telefone:</strong> {systemDetailsModal.phone || systemDetailsModal.customerPhone || 'Não informado'}</div>
-                  <div><strong>Nascimento:</strong> {systemDetailsModal.birthday ? new Date(systemDetailsModal.birthday + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informado'}</div>
-                  <div><strong>Endereço:</strong> {systemDetailsModal.address || 'Não informado'}</div>
+                  <div><strong>Nome:</strong> {enriched.client || 'Não informado'}</div>
+                  <div><strong>CPF/CNPJ:</strong> {enriched.cpf || enriched.customerCpf || 'Não informado'}</div>
+                  <div><strong>E-mail:</strong> {enriched.email}</div>
+                  <div><strong>Telefone:</strong> {enriched.phone}</div>
+                  <div><strong>Nascimento:</strong> {enriched.birthday ? new Date(enriched.birthday + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informado'}</div>
+                  <div><strong>Endereço:</strong> {enriched.address}</div>
                 </div>
               </div>
               
               <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Detalhes do Pedido</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Data e Hora:</strong> {systemDetailsModal.date ? new Date(systemDetailsModal.date).toLocaleString('pt-BR') : 'Não informado'}</div>
-                  <div><strong>Origem:</strong> {systemDetailsModal.source === 'vitrine' ? 'Online (Vitrine Virtual)' : 'Venda Física (Balcão/CRM)'}</div>
-                  <div><strong>Vendedor:</strong> {systemDetailsModal.salesperson || 'Nenhum / Auto-atendimento'}</div>
-                  <div><strong>Prazo de Entrega:</strong> {systemDetailsModal.maxDeliveryDays ? systemDetailsModal.maxDeliveryDays + ' dias úteis' : 'Não aplicável'}</div>
-                  <div><strong>Status do Pedido:</strong> <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{systemDetailsModal.status}</span></div>
-                  <div><strong>Status de Entrega:</strong> {systemDetailsModal.shippingStatus || 'Aguardando'}</div>
+                  <div><strong>Data e Hora:</strong> {enriched.date ? new Date(enriched.date).toLocaleString('pt-BR') : 'Não informado'}</div>
+                  <div><strong>Origem:</strong> {enriched.source === 'vitrine' ? 'Online (Vitrine Virtual)' : 'Venda Física (Balcão/CRM)'}</div>
+                  <div><strong>Vendedor:</strong> {enriched.salesperson}</div>
+                  <div><strong>Prazo de Entrega:</strong> {enriched.maxDeliveryDays ? enriched.maxDeliveryDays + ' dias úteis' : 'Não aplicável'}</div>
+                  <div><strong>Status do Pedido:</strong> <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{enriched.status}</span></div>
+                  <div><strong>Status de Entrega:</strong> {enriched.shippingStatus}</div>
                 </div>
               </div>
             </div>
@@ -2861,10 +2879,10 @@ function App() {
             <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)', marginBottom: '2rem' }}>
               <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Pagamento e Produtos</h3>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>Método de Pagamento:</strong> {systemDetailsModal.paymentMethod || systemDetailsModal.checkoutMethod || 'Não informado'}
+                <strong>Método de Pagamento:</strong> {enriched.paymentMethod}
               </div>
               
-              {systemDetailsModal.products && systemDetailsModal.products.length > 0 ? (
+              {enriched.products && Array.isArray(enriched.products) && enriched.products.length > 0 ? (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
@@ -2877,7 +2895,7 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {systemDetailsModal.products.map((p, i) => (
+                      {enriched.products.map((p, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                           <td style={{ padding: '0.75rem' }}>{p.sku || p.id || '-'}</td>
                           <td style={{ padding: '0.75rem' }}>{p.name || p.title}</td>
@@ -2891,11 +2909,15 @@ function App() {
                       <tr>
                         <td colSpan="4" style={{ padding: '1rem 0.75rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.1rem' }}>Total Geral:</td>
                         <td style={{ padding: '1rem 0.75rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--success)' }}>
-                          R$ {Number(systemDetailsModal.value || systemDetailsModal.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                          R$ {Number(enriched.value || enriched.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
+                </div>
+              ) : enriched.products && typeof enriched.products === 'string' ? (
+                <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.03)', borderRadius: '0.5rem' }}>
+                  <strong>Itens:</strong> {enriched.products}
                 </div>
               ) : (
                 <p style={{ color: 'var(--text-secondary)' }}>Nenhum produto listado neste pedido.</p>
@@ -2908,7 +2930,8 @@ function App() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
 
       {/* Add Modal */}
