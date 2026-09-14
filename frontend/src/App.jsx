@@ -745,6 +745,12 @@ function App() {
       }
       
       if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj && loginData.email) {
+        const userRefCheck = doc(db, 'users', cpfClean);
+        const userSnapCheck = await getDoc(userRefCheck);
+        if (userSnapCheck.exists()) {
+          alert('Esse CPF já está vinculado a outro cadastro.');
+          return;
+        }
         const userDoc = {
           name: loginData.name,
           email: loginData.email,
@@ -2700,6 +2706,10 @@ function App() {
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '1rem', minHeight: '600px' }}>
             <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
               <div style={{ display: 'inline-block', position: 'relative', width: '100%', maxWidth: '600px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', width: '1.25rem', height: '1.25rem', color: 'var(--text-secondary)', pointerEvents: 'none', zIndex: 1 }}>
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
                 <input 
                   type="text" 
                   placeholder="Buscar por nome ou SKU..." 
