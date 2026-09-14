@@ -1962,7 +1962,8 @@ function App() {
                           <span style={{ fontSize: '0.85rem', color: 'var(--success)', fontWeight: 'bold' }}>▷ Concluído</span>
                         ) : (
                           <button className="advance-btn" onClick={(e) => { e.stopPropagation(); advanceOrderStatus(order.id, status); }}>
-                            Avançar ➡️
+                            Avançar
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft: '4px'}}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                           </button>
                         )}
                       </div>
@@ -2062,11 +2063,11 @@ function App() {
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-    <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Contas a receber</h3>
+    <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Lucro</h3>
     <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setIsDevManagerOpen(true)}>+ Serviços de Programação</button>
   </div>
                         <div style={{ fontSize: '2.5rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          ↓ R$ {totalWonValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          ↓ R$ {(totalWonValue - totalPaidExpenses).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                           {receivedByPix > 0 && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '99px' }}>PIX: R$ {receivedByPix.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
@@ -2328,25 +2329,29 @@ function App() {
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', justifyContent: 'flex-end' }}>
                           <button className="btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--danger)', border: '1px solid var(--danger)' }} onClick={() => markDealLost(deal.id)}>Perdido</button>
                           <button className="advance-btn" onClick={() => advanceDealStatus(deal.id, status)}>
-                            Avançar ➡️
+                            Avançar
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft: '4px'}}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                           </button>
                         </div>
                       )}
                       {(status === 'Ganho' || status === 'Perdido') && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                          <button className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }} onClick={(e) => { e.stopPropagation(); archiveDeal(deal.id); }}>
-                            📦 Arquivar Negócio
+                          <button className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={(e) => { e.stopPropagation(); archiveDeal(deal.id); }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+                            Arquivar
                           </button>
                         </div>
                       )}
                       {status === 'Ganho' && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginTop: '0.5rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 'bold' }}>
-                            🎉 Ganho (Saída registrada)
+                          <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            Ganho (Saída registrada)
                           </span>
                           {deal.nfeEmitted && (
-                            <span style={{ fontSize: '0.75rem', background: 'var(--success)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', marginTop: '0.25rem', fontWeight: 'bold' }}>
-                              🧾 NF-e Emitida
+                            <span style={{ fontSize: '0.75rem', background: 'var(--success)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', marginTop: '0.25rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                              NF-e Emitida
                             </span>
                           )}
                           {!deal.nfeEmitted && (
@@ -3027,14 +3032,15 @@ function App() {
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               {items.filter(i => i.quantity <= 20).sort((a, b) => a.quantity - b.quantity).map(item => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1rem', borderRadius: '0.5rem', background: item.quantity <= 5 ? '#fee2e2' : '#ffedd5', border: `1px solid ${item.quantity <= 5 ? '#ef4444' : '#f59e0b'}` }}>
-                  <span style={{ fontSize: '1.5rem' }}>{item.quantity <= 5 ? '' : '⚠️'}</span>
-                  <div>
-                    <h4 style={{ margin: '0 0 0.25rem 0', color: item.quantity <= 5 ? '#991b1b' : '#9a3412', fontSize: '0.9rem' }}>{item.name}</h4>
-                    <p style={{ margin: 0, fontSize: '0.8rem', color: item.quantity <= 5 ? '#b91c1c' : '#b45309' }}>
-                      Restam apenas <strong>{item.quantity} unidades</strong> em estoque.
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '0.5rem', background: item.quantity <= 5 ? '#fee2e2' : '#fff7ed', borderLeft: `3px solid ${item.quantity <= 5 ? '#ef4444' : '#f59e0b'}` }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.quantity <= 5 ? '#ef4444' : '#f59e0b', flexShrink: 0 }}></div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ margin: '0 0 0.1rem 0', color: item.quantity <= 5 ? '#991b1b' : '#9a3412', fontSize: '0.875rem', fontWeight: '600' }}>{item.name}</h4>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: item.quantity <= 5 ? '#b91c1c' : '#b45309' }}>
+                      {item.quantity <= 5 ? 'Crítico' : 'Baixo'} — <strong>{item.quantity} un.</strong> em estoque
                     </p>
                   </div>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: item.quantity <= 5 ? '#ef4444' : '#f59e0b', background: item.quantity <= 5 ? '#fee2e2' : '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>{item.quantity <= 5 ? 'CRÍTICO' : 'BAIXO'}</span>
                 </div>
               ))}
               
