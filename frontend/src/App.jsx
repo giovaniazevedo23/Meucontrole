@@ -100,6 +100,13 @@ function App() {
   const [sheetsLoaded, setSheetsLoaded] = useState(false);
   const [sheetsActiveTab, setSheetsActiveTab] = useState('Vendas Arquivadas');
 
+    // Auto-load sheets when Sistema tab is opened
+    React.useEffect(() => {
+      if (activeTab === 'sistema' && !sheetsLoaded && !sheetsLoading) {
+        handleLoadSheets();
+      }
+    }, [activeTab]);
+
   const handleLoadSheets = async () => {
     setSheetsLoading(true);
     try {
@@ -1474,7 +1481,7 @@ function App() {
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
             Lojas
           </button>
-          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>Sistemas</button>
+          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>Sistema</button>
         </nav>
 
 
@@ -1652,6 +1659,10 @@ function App() {
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
             </span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', width: '1.25rem', height: '1.25rem', color: 'var(--text-secondary)', pointerEvents: 'none', zIndex: 1 }}>
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
             <input 
               type="text" 
               placeholder="Buscar por nome ou SKU..." 
@@ -2695,10 +2706,10 @@ function App() {
               <div style={{ display: 'inline-block', position: 'relative', width: '100%', maxWidth: '600px' }}>
                 <input 
                   type="text" 
-                  placeholder="Buscar por cliente, CPF, pedido, NFe..." 
+                  placeholder="Buscar por nome ou SKU..." 
                   value={sistemaSearch}
                   onChange={e => setSistemaSearch(e.target.value)}
-                  style={{ width: '100%', padding: '1rem 1rem 1rem 1rem', borderRadius: '2rem', border: '2px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', outline: 'none', fontSize: '1.1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
+                  style={{ width: '100%', padding: '1rem 1rem 1rem 3.25rem', boxSizing: 'border-box', borderRadius: '2rem', border: '2px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', outline: 'none', fontSize: '1.1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
                 />
               </div>
             </div>
@@ -2706,6 +2717,29 @@ function App() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
               {(() => {
                 const s = sistemaSearch.toLowerCase();
+                
+                // Merge data: deals (Firestore) + sheetsData (Pedidos vitrine)
+                const sheetPedidos = (sheetsData['Pedidos vitrine'] || []).map((row, i) => ({
+                  id: 'pv-' + i,
+                  client: row['USUARIO'] || '',
+                  cpf: row['CPF'] || '',
+                  email: row['EMAIL'] || '',
+                  address: row['ENDEREÇO'] || '',
+                  phone: row['N° DE TEEFONE'] || '',
+                  date: row['DATA E HORA DO PEDIDO'] || '',
+                  products: row['ITEM COMPRADO'] || '',
+                  salesperson: row['VENDEDOR ESCOLHIDO'] || '',
+                  maxDeliveryDays: row['PRAZO DE ENTREGA'] || '',
+                  quantity: row['QUANTIDADE'] || 1,
+                  paymentMethod: row['METODO DE PAGAMENTO'] || '',
+                  source: 'vitrine',
+                  status: row['STATUS DE ENTREGA'] || 'Pendente',
+                  shippingStatus: row['STATUS DE ENTREGA'] || 'Aguardando',
+                  _origin: 'planilha'
+                }));
+                
+                const allRecords = [...deals.map(d => ({...d, _origin: 'firebase'})), ...sheetPedidos];
+                
                 if (!s) {
                   return (
                     <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem', color: '#999' }}>
@@ -2714,11 +2748,12 @@ function App() {
                     </div>
                   );
                 }
-                const filtered = deals.filter(d => 
+                const filtered = allRecords.filter(d => 
                   (d.client && d.client.toLowerCase().includes(s)) ||
                   (d.cpf && d.cpf.includes(s)) ||
                   (d.customerCpf && d.customerCpf.includes(s)) ||
-                  (d.id && d.id.toLowerCase().includes(s))
+                  (d.id && d.id.toLowerCase().includes(s)) ||
+                  (d.products && typeof d.products === 'string' && d.products.toLowerCase().includes(s))
                 );
                 
                 if (filtered.length === 0) {
@@ -2729,15 +2764,15 @@ function App() {
                   );
                 }
                 
-                return filtered.map(deal => {
+                return filtered.map((deal, idx) => {
                   return (
-                    <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${deal.source === 'vitrine' ? 'var(--primary-color)' : 'var(--warning)'}` }}>
+                    <div key={deal.id || ('rec-' + idx)} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${deal.source === 'vitrine' ? 'var(--primary-color)' : 'var(--warning)'}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{deal.client || 'Cliente não informado'}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleDateString('pt-BR')}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#666' }}>{deal.date ? new Date(deal.date).toLocaleDateString('pt-BR') : ''}</div>
                         </div>
-                        <span style={{ fontSize: '0.8rem', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>#{deal.id.slice(-6)}</span>
+                        <span style={{ fontSize: '0.8rem', background: deal._origin === 'planilha' ? '#d4edda' : '#eee', padding: '2px 8px', borderRadius: '10px' }}>{deal._origin === 'planilha' ? 'Planilha' : '#' + deal.id.slice(-6)}</span>
                       </div>
                       
                       <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '0.5rem', flex: 1 }}>
@@ -2753,10 +2788,18 @@ function App() {
                           <span style={{ color: '#666', fontSize: '0.9rem' }}>Status de Entrega:</span>
                           <span style={{ fontWeight: 'bold' }}>{deal.shippingStatus || 'Aguardando'}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#666', fontSize: '0.9rem' }}>Valor Total:</span>
-                          <span style={{ fontWeight: 'bold' }}>R$ {Number(deal.value || deal.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                        </div>
+                        {deal.value || deal.total ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#666', fontSize: '0.9rem' }}>Valor Total:</span>
+                            <span style={{ fontWeight: 'bold' }}>R$ {Number(deal.value || deal.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                          </div>
+                        ) : null}
+                        {deal._origin === 'planilha' && deal.products ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                            <span style={{ color: '#666', fontSize: '0.9rem' }}>Produto:</span>
+                            <span style={{ fontWeight: 'bold', textAlign: 'right', maxWidth: '60%' }}>{deal.products}</span>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
