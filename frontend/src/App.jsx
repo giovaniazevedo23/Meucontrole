@@ -11,7 +11,7 @@ import { fetchAllSheets, SHEET_TABS } from './utils/sheetsReader';
 import { exportToExcel, exportMultipleSheetsToExcel } from './utils/excelExport';
 import { exportToPdf } from './utils/pdfExport';
 import * as XLSX from 'xlsx';
-const getStatusDetails = (quantity) => {
+const getStatusDetails = (qty) => { const quantity = Number(qty);
   if (quantity <= 5) return { text: 'Estoque Crítico', className: 'status-critical' };
   if (quantity <= 20) return { text: 'Estoque Baixo', className: 'status-low-stock' };
   return { text: 'Em Estoque', className: 'status-in-stock' };
@@ -30,6 +30,8 @@ function App() {
   const [activeTab, setActiveTab] = useState('estoque'); // 'estoque', 'movimentacoes', 'relatorios', 'compras'
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [sistemaSearch, setSistemaSearch] = useState('');
+  const [systemDetailsModal, setSystemDetailsModal] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -65,7 +67,7 @@ function App() {
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [trackingModal, setTrackingModal] = useState(null);
   const [internalChat, setInternalChat] = useState(null);
-  const [newDeal, setNewDeal] = useState({ client: '', phone: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
+  const [newDeal, setNewDeal] = useState({ client: '', phone: '', customerCpf: '', birthday: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
   const [crmTab, setCrmTab] = useState('dashboard');
   const [salesGoal, setSalesGoal] = useState(() => JSON.parse(localStorage.getItem('controle_goal')) || 30500);
@@ -319,8 +321,8 @@ function App() {
 
   const totalItems = items.length;
   const totalQuantity = items.reduce((acc, curr) => acc + Number(curr.quantity), 0);
-  const criticalStockItems = items.filter(i => i.quantity <= 5).length;
-  const lowStockItems = items.filter(i => i.quantity > 5 && i.quantity <= 20).length;
+  const criticalStockItems = items.filter(i => Number(i.quantity) <= 5).length;
+  const lowStockItems = items.filter(i => Number(i.quantity) > 5 && Number(i.quantity) <= 20).length;
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
@@ -1566,7 +1568,8 @@ function App() {
                         
                         <div style={{ marginBottom: '1rem' }}>
                           <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
-                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Rastreio: {deal.shippingStatus || 'Aguardando'}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Prazo de Entrega: {deal.maxDeliveryDays || 3} dias úteis</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status de Entrega: {deal.shippingStatus || 'Aguardando'}</div>
                           <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
                           {deal.products && deal.products.length > 0 && (
                             <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
@@ -1609,7 +1612,8 @@ function App() {
                         
                         <div style={{ marginBottom: '1rem' }}>
                           <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status: {deal.status}</div>
-                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Rastreio: {deal.shippingStatus}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Prazo de Entrega: {deal.maxDeliveryDays || 3} dias úteis</div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Status de Entrega: {deal.shippingStatus || 'Entregue'}</div>
                           <div style={{ fontSize: '0.85rem', color: '#666' }}>Vendedor Atribuído: {deal.salesperson || 'Nenhum'}</div>
                           {deal.products && deal.products.length > 0 && (
                             <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px' }}>
@@ -1801,7 +1805,7 @@ function App() {
                           title="Retirar Oferta"
                           style={{ color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
                         >
-                          🚫 Retirar Oferta
+                          Retirar Oferta
                         </button>
                       )}
                       <button className="btn-danger" onClick={() => handleDelete(item.id)}>
@@ -2751,52 +2755,108 @@ function App() {
       </div>
     </div>
   )}
-        {activeTab === 'config-nfe' && (
-          <div className="glass-panel" style={{ padding: '2rem', borderRadius: '1rem' }}>
-            <h2 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>Configurações de Nota Fiscal Eletrônica (SaaS)</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', lineHeight: '1.5' }}>
-              Para emitir Notas Fiscais reais automaticamente, você precisa de uma conta na <strong>NFE.io</strong>. <br />
-              1. Crie sua conta em <a href="https://app.nfe.io" target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary-color)'}}>https://app.nfe.io</a>.<br />
-              2. Faça o upload do seu Certificado Digital A1 no painel deles.<br />
-              3. Insira sua <strong>Chave de API</strong> e o <strong>ID da Empresa</strong> abaixo.
-            </p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', maxWidth: '600px' }}>
-              <div className="form-group">
-                <label>Chave de API (NFE.io)</label>
+
+        {activeTab === 'sistema' && (
+          <div className="glass-panel" style={{ padding: '2rem', borderRadius: '1rem', minHeight: '600px' }}>
+            <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+              <div style={{ display: 'inline-block', position: 'relative', width: '100%', maxWidth: '600px' }}>
                 <input 
                   type="text" 
-                  value={nfeSettings?.apiKey || ''} 
-                  onChange={(e) => setNfeSettings({...nfeSettings, apiKey: e.target.value})}
-                  placeholder="Ex: 55df4dc6b6cd9007e4f13ee8..." 
+                  placeholder="Buscar por cliente, CPF, pedido, NFe..." 
+                  value={sistemaSearch}
+                  onChange={e => setSistemaSearch(e.target.value)}
+                  style={{ width: '100%', padding: '1rem 1rem 1rem 1rem', borderRadius: '2rem', border: '2px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--text-primary)', outline: 'none', fontSize: '1.1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
                 />
               </div>
-              <div className="form-group">
-                <label>ID da Empresa (NFE.io)</label>
-                <input 
-                  type="text" 
-                  value={nfeSettings?.companyId || ''} 
-                  onChange={(e) => setNfeSettings({...nfeSettings, companyId: e.target.value})}
-                  placeholder="Ex: 60a1b2c3d4e5f60011..." 
-                />
-              </div>
-              <button className="btn-primary" onClick={async () => {
-                try {
-                  const companyIdStr = currentUser.companyCnpj.replace(/\D/g, '');
-                  await setDoc(doc(db, 'settings', 'nfe_config_' + companyIdStr), nfeSettings);
-                  alert('Configurações da NFe salvas com sucesso!');
-                } catch (e) {
-                  console.error(e);
-                  alert('Erro ao salvar as configurações.');
-                }
-              }}>
-                Salvar Configurações
-              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+              {(() => {
+                const s = sistemaSearch.toLowerCase();
+                return deals.filter(d => 
+                  !s || 
+                  (d.client && d.client.toLowerCase().includes(s)) ||
+                  (d.cpf && d.cpf.includes(s)) ||
+                  (d.customerCpf && d.customerCpf.includes(s)) ||
+                  (d.id && d.id.toLowerCase().includes(s))
+                ).map(deal => {
+                  return (
+                    <div key={deal.id} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${deal.source === 'vitrine' ? 'var(--primary-color)' : 'var(--warning)'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{deal.client || 'Cliente não informado'}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#666' }}>{new Date(deal.date).toLocaleDateString('pt-BR')}</div>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>#{deal.id.slice(-6)}</span>
+                      </div>
+                      
+                      <div style={{ background: 'var(--glass-bg)', padding: '1rem', borderRadius: '0.5rem', flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#666', fontSize: '0.9rem' }}>Status:</span>
+                          <span style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{deal.status}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#666', fontSize: '0.9rem' }}>Prazo de Entrega:</span>
+                          <span style={{ fontWeight: 'bold' }}>{deal.maxDeliveryDays || 3} dias úteis</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#666', fontSize: '0.9rem' }}>Status de Entrega:</span>
+                          <span style={{ fontWeight: 'bold' }}>{deal.shippingStatus || 'Aguardando'}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#666', fontSize: '0.9rem' }}>Valor Total:</span>
+                          <span style={{ fontWeight: 'bold' }}>R$ {Number(deal.value || deal.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="btn-secondary" style={{ flex: 1, padding: '0.5rem' }} onClick={() => {
+                          const num = deal.phone || deal.customerPhone;
+                          if (num) {
+                            const cleanNum = num.replace(/\D/g, '');
+                            window.open(`https://wa.me/55${cleanNum}`, '_blank');
+                          } else alert('Telefone não informado');
+                        }}>WhatsApp</button>
+                        <button className="btn-primary" style={{ flex: 1, padding: '0.5rem' }} onClick={() => setSystemDetailsModal(deal)}>
+                          Detalhes
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
 
       </main>
+
+      {systemDetailsModal && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '800px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+              <h2>Detalhes do Pedido #{systemDetailsModal.id.slice(-6)}</h2>
+              <button className="close-btn" onClick={() => setSystemDetailsModal(null)}>×</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+              <div>
+                <h3>Dados do Cliente</h3>
+                <div><strong>Nome:</strong> {systemDetailsModal.client || 'N/A'}</div>
+                <div><strong>Telefone:</strong> {systemDetailsModal.phone || systemDetailsModal.customerPhone || 'N/A'}</div>
+              </div>
+              <div>
+                <h3>Detalhes Financeiros</h3>
+                <div><strong>Valor:</strong> R$ {Number(systemDetailsModal.value || systemDetailsModal.total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                <div><strong>Status:</strong> {systemDetailsModal.status}</div>
+              </div>
+            </div>
+            <div className="form-actions" style={{ marginTop: '2rem' }}>
+              <button className="btn-primary" onClick={() => setSystemDetailsModal(null)} style={{ width: '100%', padding: '1rem' }}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Add Modal */}
       {isModalOpen && (
@@ -4099,13 +4159,24 @@ function App() {
             </div>
 
             <form onSubmit={handleSendInternalMessage} style={{ display: 'flex', gap: '0.5rem' }}>
-              <input 
-                type="text" 
-                placeholder="Digite sua mensagem..." 
-                value={internalChat.msg}
-                onChange={e => setInternalChat({...internalChat, msg: e.target.value})}
-                style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: '1px solid #ccc' }}
-              />
+                            <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                <input 
+                  type="text" 
+                  placeholder="Digite sua mensagem..." 
+                  value={internalChat.msg}
+                  onChange={e => setInternalChat({...internalChat, msg: e.target.value})}
+                  style={{ width: '100%', padding: '0.75rem 2.5rem 0.75rem 0.75rem', borderRadius: '2rem', border: '1px solid #ccc' }}
+                />
+                <label style={{ position: 'absolute', right: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#666' }}>
+                  <input type="file" style={{ display: 'none' }} onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      alert('Upload de documento em breve: ' + file.name);
+                    }
+                  }} />
+                  <span style={{ fontSize: '1.2rem' }}>📎</span>
+                </label>
+              </div>
               <button type="submit" className="btn-primary" style={{ borderRadius: '2rem', padding: '0.75rem 1.5rem' }}>
                 Enviar
               </button>

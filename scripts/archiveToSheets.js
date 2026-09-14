@@ -46,16 +46,19 @@ const DIRETORIO_DE_CAMPOS = {
   "PREÇO": ["price", "value", "total"],
   "LOCALIZAÇÃO": ["location"],
   "QUANTIDADE": ["quantity", "qtdTotal"],
-  "ITEN COMPRADO": ["itensStr"],
+  "ITEM COMPRADO": ["itensStr"],
+  "STATUS": ["stockStatus", "status"],
   
   // Pedidos e Metadados
   "DATA E HORA DO PEDIDO": ["date", "createdAt"],
   "DATA E HORA": ["date", "createdAt", "issueDate"],
   "DATA": ["dateStr"],
   "HORA": ["timeStr"],
-  "VENDEDOR ESCLHIDO": ["salesperson"],
+  "VENDEDOR ESCOLHIDO": ["salesperson"],
+  "VENDEDOR ESCLHIDO": ["salesperson"], // typo antigo
   "VENDEDOR": ["user", "salesperson"],
-  "PRAZO DE ENTREGA": ["shippingStatus", "deliveryDays"],
+  "PRAZO DE ENTREGA": ["deliveryDays"],
+  "STATUS DE ENTREGA": ["shippingStatus", "status"],
   "METODO DE PAGAMENTO": ["paymentMethod", "checkoutMethod"],
   "LOCAL DA COMPRA": ["localComp"],
   "LOCAL DE VENDA": ["localComp"],
@@ -232,6 +235,9 @@ function enriquecerDados(col, doc) {
     doc.qtdTotal = prods.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
     doc.itensStr = prods.map(p => p.quantity + "x " + p.name + " (SKU: " + p.sku + ")").join(" | ");
     
+    // Calcula prazo de entrega baseado nos produtos ou default de 3 dias
+    doc.deliveryDays = doc.deliveryDays || prods.reduce((acc, p) => Math.max(acc, Number(p.deliveryDays || 3)), 3);
+    
     // Define Local de Compra como Online para vitrine ou o location original
     doc.localComp = (doc.source === 'vitrine') ? 'Online' : (doc.location || 'Físico');
     
@@ -241,6 +247,14 @@ function enriquecerDados(col, doc) {
       doc.timeStr = d.toLocaleTimeString('pt-BR');
     } catch(e) {}
   }
+
+  if (col === 'items') {
+    const qtd = Number(doc.quantity || 0);
+    if (qtd <= 5) doc.stockStatus = "Estoque Crítico";
+    else if (qtd <= 20) doc.stockStatus = "Estoque Baixo";
+    else doc.stockStatus = "Em Estoque";
+  }
+
   return doc;
 }
 
@@ -381,40 +395,6 @@ function atualizarVendasControle() {
       const contasPagar = expenses.filter(e => e.status === 'Pendente').reduce((s, e) => s + Number(e.amount || 0), 0);
       const salesGoal = 30500;
   
-      // Aniversariantes: compara mes e dia com hoje
-      const hoje = new Date();
-      const mesAtual = hoje.getMonth();    // 0-11
-      const diaAtual = hoje.getDate();
-      
-      const aniversariantesHoje = customers.filter(c => {
-        try {
-          const dtNasc = c.birthDate || c.birthday;
-          if (!dtNasc) return false;
-          const d = new Date(dtNasc + 'T12:00:00');
-          return d.getMonth() === mesAtual && d.getDate() === diaAtual;
-        } catch(e) { return false; }
-      });
-      
-      // Tambem calcula aniversariantes do mes inteiro para lembrete geral
-      const aniversariantesMes = customers.filter(c => {
-        try {
-          const dtNasc = c.birthDate || c.birthday;
-          if (!dtNasc) return false;
-          const d = new Date(dtNasc + 'T12:00:00');
-          return d.getMonth() === mesAtual;
-        } catch(e) { return false; }
-      });
-      
-      let aniversariantesStr = '';
-      if (aniversariantesHoje.length > 0) {
-        aniversariantesStr = '🎂 HOJE: ' + aniversariantesHoje.map(c => c.name).join(', ');
-      } else if (aniversariantesMes.length > 0) {
-        aniversariantesStr = 'Neste mês: ' + aniversariantesMes.map(c => {
-          const dt = new Date((c.birthDate || c.birthday) + 'T12:00:00');
-          return c.name + ' (' + dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ')';
-        }).join(' | ');
-      }
-  
       const lastRow = sheet.getLastRow();
       if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   
@@ -430,11 +410,27 @@ function atualizarVendasControle() {
         const valorPedido = Number(d.value || 0);
         const percentualPedido = salesGoal > 0 ? ((valorPedido / salesGoal) * 100).toFixed(3) + '%' : '0%';
         
+        // Pega aniversario do cliente especifico deste pedido
+        let aniversariante = '';
+        const clientName = d.client ? d.client.toLowerCase() : '';
+        const clientCpf = d.customerCpf || d.cpf || '';
+        const customerRow = customers.find(c => (c.cpf && c.cpf === clientCpf) || (c.name && c.name.toLowerCase() === clientName));
+        
+        if (customerRow) {
+          const dtNasc = customerRow.birthDate || customerRow.birthday;
+          if (dtNasc) {
+            try {
+              const dt = new Date(dtNasc + 'T12:00:00');
+              aniversariante = dt.toLocaleDateString('pt-BR');
+            } catch(e) {}
+          }
+        }
+        
         sheet.appendRow([
           1,                  // QUANTIDADE DE VENDAS (1 pedido = 1 linha)
           contasPagar,        // CONTAS A PAGAR
           d.client || '',     // NOME DOS CLIENTES
-          aniversariantesStr, // ANIVERSÁRIO
+          aniversariante,     // ANIVERSÁRIO
           salesGoal,          // METAS
           percentualPedido,   // PERCENTUAL DE METAS ATINGIDAS
           totalPecasPedido,   // PEÇAS VENDIDAS
