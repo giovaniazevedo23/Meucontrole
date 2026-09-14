@@ -1,26 +1,69 @@
 /**
- * SCRIPT COMPLETO - FIREBASE → GOOGLE SHEETS + API PARA O SITE
+ * SCRIPT COMPLETO - FIREBASE -> GOOGLE SHEETS (MOTOR DINÂMICO REVERSO)
  *
- * Colunas mapeadas diretamente das abas reais da planilha.
- *
- * INSTRUCOES:
- * 1. Extensoes > Apps Script > cole este codigo > salve (Ctrl+S)
- * 2. Implantar > Nova implantacao > Web App > Qualquer pessoa > Implantar
- * 3. Copie a URL e cole em sheetsReader.js (APPS_SCRIPT_URL)
- * 4. Crie Acionador: funcao "arquivarDados" todo dia de madrugada
+ * Este script pega as abas e, lendo os cabeçalhos (Linha 1), preenche os
+ * dados correspondentes puxando diretamente do Firebase, ou seja:
+ * "A planilha dita as regras das colunas, e o Firebase obedece preenchendo."
  */
 
 const CONFIG = {
   projectId: "controle-1bc41",
 
+  // Abas mapeadas dinamicamente
   abaDeals:       "Vendas Arquivadas",
   abaMovements:   "Movimentacoes Antigas",
   abaClientes:    "Clientes",
-  abaVendas:      "Vendas e controle",
   abaCompras:     "Compras finalizadas",
   abaEstoque:     "Estoque atual",
-  abaIndicadores: "Indicadores",
-  abaPedidos:     "Pedidos vitrine"
+  abaPedidos:     "Pedidos vitrine",
+  
+  // Abas especiais (Matrizes ou layouts diferenciados)
+  abaFinancas:    "TABELAS DE FINANÇAS E CRESCIMENTO",
+  abaVendas:      "Vendas e controle",
+  abaIndicadores: "Indicadores"
+};
+
+// Mapeador Inteligente de Títulos de Colunas para Campos do Firebase
+const DIRETORIO_DE_CAMPOS = {
+  // Dados de Clientes / Usuários
+  "NOME": ["name", "client"],
+  "USUARIO": ["client"],
+  "CLIENTE": ["client", "supplier"],
+  "CPF": ["cpf", "customerCpf"],
+  "N° TELEFONE": ["phone", "customerPhone"],
+  "N° DE TELEFONE": ["phone", "customerPhone"],
+  "N° DE TEEFONE": ["phone", "customerPhone"], // Corrigindo typo
+  "TELEFONE": ["phone", "customerPhone"],
+  "EMAIL": ["email"],
+  "DATA DE NASCIMENTO": ["birthDate", "birthday"],
+  "COMPRAS": ["totalPurchases", "purchases"],
+  "ENDEREÇO": ["address", "fullAddress"],
+  
+  // Produtos / Vendas / Estoque
+  "PRODUTO": ["name", "productName"],
+  "SKU": ["sku"],
+  "PREÇO UNIT.": ["price", "unitPrice"],
+  "PREÇO": ["price", "value", "total"],
+  "LOCALIZAÇÃO": ["location"],
+  "QUANTIDADE": ["quantity", "qtdTotal"],
+  "ITEN COMPRADO": ["itensStr"],
+  
+  // Pedidos e Metadados
+  "DATA E HORA DO PEDIDO": ["date", "createdAt"],
+  "DATA E HORA": ["date", "createdAt", "issueDate"],
+  "DATA": ["dateStr"],
+  "HORA": ["timeStr"],
+  "VENDEDOR ESCLHIDO": ["salesperson"],
+  "VENDEDOR": ["user", "salesperson"],
+  "PRAZO DE ENTREGA": ["shippingStatus", "deliveryDays"],
+  "METODO DE PAGAMENTO": ["paymentMethod", "checkoutMethod"],
+  "LOCAL DA COMPRA": ["localComp"],
+  "LOCAL DE VENDA": ["localComp"],
+  "TIPO": ["type"],
+  "MOTIVO": ["reason"],
+  "SITUAÇÃO": ["status"],
+  "N° DO PROTOCOLO": ["id"],
+  "CODIGO DA NOTA FISCAL": ["document"]
 };
 
 // ============================================================
@@ -31,15 +74,10 @@ function doGet(e) {
   const params = (e && e.parameter) ? e.parameter : {};
   const nomeDaAba = params.aba || null;
 
-
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const resultado = {};
-    const todasAsAbas = [
-      CONFIG.abaDeals, CONFIG.abaMovements, CONFIG.abaClientes,
-      CONFIG.abaVendas, CONFIG.abaCompras, CONFIG.abaEstoque,
-      CONFIG.abaIndicadores, CONFIG.abaPedidos
-    ];
+    const todasAsAbas = Object.values(CONFIG);
 
     if (nomeDaAba) {
       resultado[nomeDaAba] = lerAba(ss, nomeDaAba);
@@ -81,356 +119,330 @@ function lerAba(ss, nomeAba) {
 
 function arquivarDados() {
   Logger.log("=== Iniciando rotina de arquivamento ===");
-  arquivarPedidosVitrine();
-  arquivarMovementsAntigos();
-  arquivarClientes();
+  
+  // Abas Dinâmicas Baseadas em Colunas
+  processarAbaDinamica("deals", CONFIG.abaPedidos, doc => doc.source === 'vitrine');
+  
+  // Movimentacoes: arquiva e deleta APENAS as que tem mais de 30 dias, para não sumir do gráfico do painel ADM
+  const trintaDiasAtras = new Date();
+  trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+  processarAbaDinamica("movements", CONFIG.abaMovements, doc => {
+    if (!doc.date) return true;
+    return new Date(doc.date) < trintaDiasAtras;
+  }, true); 
+  
+  processarAbaDinamica("customers", CONFIG.abaClientes, doc => true);
+  processarAbaDinamica("orders", CONFIG.abaCompras, doc => doc.status === 'Recebido', true);
+  processarAbaDinamica("items", CONFIG.abaEstoque, doc => true);
+  
+  // Abas Especiais / Matrizes
+  atualizarFinancasCrescimento();
   atualizarVendasControle();
-  arquivarComprasFinalizadas();
-  atualizarEstoqueAtual();
   atualizarIndicadores();
+  
   Logger.log("=== Rotina finalizada ===");
 }
 
 // ============================================================
-//  1. PEDIDOS VITRINE
-//  Colunas reais: DATA E HORA DO PEDIDO | USUARIO | EMAIL | CPF |
-//    ENDEREÇO | N° DE TEEFONE | ITEN COMPRADO | VENDEOR ESCLHIDO |
-//    PRAZO DE ENTREGA | QUANTIDADE | DESCRIÇAÕ DO ITEM |
-//    METODO DE PAGAMENTO | LOCAL DA COMPRA
+//  O MOTOR DINÂMICO DE PROCESSAMENTO DE COLUNAS
 // ============================================================
 
-function arquivarPedidosVitrine() {
-  const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/deals";
+function processarAbaDinamica(collectionName, abaNome, filterFn, deletarApos = false) {
+  const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/" + collectionName;
   try {
     const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     if (response.getResponseCode() !== 200) return;
     const data = JSON.parse(response.getContentText());
     if (!data.documents) return;
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaPedidos);
-    if (!sheet) { Logger.log("Aba Pedidos vitrine nao encontrada!"); return; }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(abaNome);
+    if (!sheet) { Logger.log("Aba nao encontrada: " + abaNome); return; }
 
-    // Busca Customers para preencher e-mail, cpf e endereço caso faltem no deal
-    const custResp = UrlFetchApp.fetch("https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/customers", { muteHttpExceptions: true });
-    const custData = JSON.parse(custResp.getContentText());
-    const customers = (custData.documents || []).map(d => parseFirestoreDoc(d));
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!headers || headers.length === 0) return;
+
+    // Snapshot: limpa dados e reescreve caso nao seja log de append com delecao
+    if (!deletarApos) {
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+    }
 
     data.documents.forEach(doc => {
-      const deal = parseFirestoreDoc(doc);
-      if (deal.source !== 'vitrine') return;
+      let fDoc = parseFirestoreDoc(doc);
+      if (filterFn && !filterFn(fDoc)) return;
+      
+      // Enriquecimento de Dados Auxiliares (Para facilitar o de-para)
+      fDoc = enriquecerDados(collectionName, fDoc);
 
-      let qtdTotal = 0;
-      let itensStr = '';
-      try {
-        const prods = typeof deal.products === 'string' ? JSON.parse(deal.products) : (deal.products || []);
-        qtdTotal = prods.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
-        itensStr = prods.map(p => p.quantity + "x " + p.name + " (SKU: " + p.sku + ")").join(" | ");
-      } catch(err) { itensStr = String(deal.products || ''); }
+      const novaLinha = [];
+      headers.forEach(headerStr => {
+        novaLinha.push(resolverCampo(fDoc, headerStr));
+      });
 
-      // Tenta achar o cliente pelo nome ou CPF associado
-      let customer = null;
-      if (deal.customerCpf) {
-        customer = customers.find(c => c.cpf === deal.customerCpf);
-      } else if (deal.client) {
-        customer = customers.find(c => c.name === deal.client);
+      sheet.appendRow(novaLinha);
+
+      if (deletarApos) {
+        deletarDocumento(doc.name);
       }
-
-      const email = deal.email || (customer ? customer.email : '');
-      const cpf = deal.cpf || deal.customerCpf || (customer ? customer.cpf : '');
-      const address = deal.address || (customer ? [customer.address, customer.neighborhood, customer.city].filter(Boolean).join(', ') : '');
-
-      // Separa data e hora do timestamp ISO
-      const dataHora  = deal.date || new Date().toISOString();
-      const localComp = address || deal.location || 'Online (Vitrine)';
-
-      sheet.appendRow([
-        dataHora,                                          // DATA E HORA DO PEDIDO
-        deal.client         || '',                         // USUARIO
-        email,                                             // EMAIL
-        cpf,                                               // CPF
-        address,                                           // ENDEREÇO
-        deal.phone || (customer ? customer.phone : '') || '', // N° DE TEEFONE
-        itensStr,                                          // ITEN COMPRADO
-        deal.salesperson    || '',                         // VENDEOR ESCLHIDO
-        deal.shippingStatus || deal.deliveryDays || '',    // PRAZO DE ENTREGA
-        qtdTotal,                                          // QUANTIDADE
-        deal.title          || '',                         // DESCRIÇAÕ DO ITEM
-        deal.paymentMethod  || deal.checkoutMethod || '',  // METODO DE PAGAMENTO
-        localComp                                          // LOCAL DA COMPRA
-      ]);
-      Logger.log("Pedido vitrine: " + deal.client);
     });
 
-  } catch (e) { Logger.log("Erro pedidos vitrine: " + e.message); }
+    Logger.log("Sincronizado [" + collectionName + "] -> Aba [" + abaNome + "]");
+  } catch (e) { Logger.log("Erro " + abaNome + ": " + e.message); }
 }
 
-// ============================================================
-//  2. MOVIMENTACOES ANTIGAS - movements > 30 dias (deleta)
-//  Colunas reais: DATA | HORA | SKU | TIPO | QUAN | MOTIVO |
-//                 VENDEDOR | CLIENTE | ENTRADA | SAIDA
-// ============================================================
-
-function arquivarMovementsAntigos() {
-  const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/movements";
-  try {
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return;
-    const data = JSON.parse(response.getContentText());
-    if (!data.documents) return;
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaMovements);
-    if (!sheet) return;
-
-    data.documents.forEach(doc => {
-      const mov = parseFirestoreDoc(doc);
-
-      // Separa data e hora
-      let data_str = '';
-      let hora_str = '';
-      try {
-        const d = new Date(mov.date);
-        data_str = d.toLocaleDateString('pt-BR');
-        hora_str = d.toLocaleTimeString('pt-BR');
-      } catch(e) { data_str = mov.date || ''; }
-
-      // ENTRADA e SAIDA como colunas separadas
-      const isEntrada = mov.type === 'ENTRADA';
-      const isSaida   = mov.type === 'SAIDA' || mov.type === 'PERDA';
-
-      sheet.appendRow([
-        data_str,                                   // DATA
-        hora_str,                                   // HORA
-        mov.sku      || '',                         // SKU
-        mov.type     || '',                         // TIPO
-        mov.quantity || 0,                          // QUAN
-        mov.reason   || '',                         // MOTIVO
-        mov.user     || '',                         // VENDEDOR
-        mov.client   || '',                         // CLIENTE
-        isEntrada ? (mov.quantity || 0) : '',       // ENTRADA
-        isSaida   ? (mov.quantity || 0) : ''        // SAIDA
-      ]);
-      deletarDocumento(doc.name);
-      Logger.log("Movement arquivado SKU: " + mov.sku);
-    });
-
-  } catch (e) { Logger.log("Erro movements: " + e.message); }
-}
-
-// ============================================================
-//  3. CLIENTES - coleção customers (snapshot, sem deletar)
-//  Colunas reais: NOME | CPF | N° TELEFONE | EMAIL |
-//                 DATA DE NASCIMENTO | COMPRAS
-// ============================================================
-
-function arquivarClientes() {
+let cachedCustomers = null;
+function getCustomersMap() {
+  if (cachedCustomers) return cachedCustomers;
   const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/customers";
   try {
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return;
-    const data = JSON.parse(response.getContentText());
-    if (!data.documents) return;
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaClientes);
-    if (!sheet) return;
-
-    // Snapshot: limpa dados e reescreve
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
-
-    data.documents.forEach(doc => {
-      const c = parseFirestoreDoc(doc);
-      sheet.appendRow([
-        c.name        || '', // NOME
-        c.cpf         || '', // CPF
-        c.phone       || '', // N° TELEFONE
-        c.email       || '', // EMAIL
-        c.birthDate   || c.birthday || '', // DATA DE NASCIMENTO
-        c.totalPurchases || c.purchases || 0 // COMPRAS (qtd ou valor)
-      ]);
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const data = JSON.parse(resp.getContentText());
+    const arr = (data.documents || []).map(d => parseFirestoreDoc(d));
+    const map = {};
+    arr.forEach(c => {
+      if (c.cpf) map[c.cpf] = c;
+      if (c.name) map[c.name.toLowerCase()] = c;
     });
-    Logger.log("Clientes atualizados: " + data.documents.length);
-
-  } catch (e) { Logger.log("Erro clientes: " + e.message); }
+    cachedCustomers = map;
+    return map;
+  } catch(e) { return {}; }
 }
 
+function enriquecerDados(col, doc) {
+  // Prepara variaveis extras baseadas na colecao
+  if (col === 'deals' || col === 'orders' || col === 'movements') {
+    const cMap = getCustomersMap();
+    let customer = null;
+    if (doc.customerCpf && cMap[doc.customerCpf]) {
+      customer = cMap[doc.customerCpf];
+    } else if (doc.client && cMap[doc.client.toLowerCase()]) {
+      customer = cMap[doc.client.toLowerCase()];
+    }
+
+    if (customer) {
+      doc.email = doc.email || customer.email || '';
+      doc.cpf = doc.cpf || doc.customerCpf || customer.cpf || '';
+      doc.phone = doc.phone || customer.phone || '';
+      doc.address = doc.address || [customer.address, customer.neighborhood, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || '';
+      doc.birthDate = doc.birthDate || customer.birthDate || customer.birthday || '';
+    }
+
+    let prods = typeof doc.products === 'string' ? JSON.parse(doc.products || '[]') : (doc.products || []);
+    doc.qtdTotal = prods.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
+    doc.itensStr = prods.map(p => p.quantity + "x " + p.name + " (SKU: " + p.sku + ")").join(" | ");
+    
+    // Define Local de Compra como Online para vitrine ou o location original
+    doc.localComp = (doc.source === 'vitrine') ? 'Online' : (doc.location || 'Físico');
+    
+    try {
+      const d = new Date(doc.date || doc.createdAt);
+      doc.dateStr = d.toLocaleDateString('pt-BR');
+      doc.timeStr = d.toLocaleTimeString('pt-BR');
+    } catch(e) {}
+  }
+  return doc;
+}
+
+function resolverCampo(fDoc, headerStr) {
+  const headerUpper = headerStr.toString().trim().toUpperCase();
+  
+  // 1. Procura mapeamento manual no Dicionario
+  const keysToTry = DIRETORIO_DE_CAMPOS[headerUpper] || [];
+  for (let k of keysToTry) {
+    if (fDoc[k] !== undefined && fDoc[k] !== null && fDoc[k] !== '') {
+      return fDoc[k];
+    }
+  }
+
+  // 2. Procura pelo nome exato do campo (em minusculo)
+  const plainHeader = headerStr.toString().toLowerCase().trim();
+  for (let key in fDoc) {
+    if (key.toLowerCase() === plainHeader) {
+      return fDoc[key];
+    }
+  }
+  
+  return '';
+}
+
+
 // ============================================================
-//  4. VENDAS E CONTROLE - resumo calculado (snapshot)
-//  Colunas reais: QUANTIDAD DE VENDAS | CONTAS A PAGAR |
-//    NOME DOS CLIENTES | ANIVERSÁRIO | METAS |
-//    PERCENTUAL DE METAS ATINGIDAS | PEÇAS VENDIDAS |
-//    NOEM DOS PRODUTOS VENDIDOS
+//  NOVO: ATUALIZAR TABELAS DE FINANÇAS E CRESCIMENTO (MATRIZ)
 // ============================================================
 
-function atualizarVendasControle() {
+function atualizarFinancasCrescimento() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.abaVendas);
-    if (!sheet) return;
+    const sheet = ss.getSheetByName(CONFIG.abaFinancas);
+    if (!sheet) { Logger.log("Aba de Financas nao encontrada!"); return; }
 
-    // Busca deals
-    const dealsResp = UrlFetchApp.fetch(
-      "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/deals",
-      { muteHttpExceptions: true }
-    );
-    const dealsData = JSON.parse(dealsResp.getContentText());
-    const deals = (dealsData.documents || []).map(d => parseFirestoreDoc(d));
+    const fetchCol = (col) => {
+      const resp = UrlFetchApp.fetch(
+        "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/" + col,
+        { muteHttpExceptions: true }
+      );
+      const data = JSON.parse(resp.getContentText());
+      return (data.documents || []).map(d => parseFirestoreDoc(d));
+    };
 
-    // Busca expenses (contas a pagar)
-    const expResp = UrlFetchApp.fetch(
-      "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/expenses",
-      { muteHttpExceptions: true }
-    );
-    const expData = JSON.parse(expResp.getContentText());
-    const expenses = (expData.documents || []).map(d => parseFirestoreDoc(d));
+    const expenses = fetchCol("expenses");
+    const deals = fetchCol("deals");
+    const orders = fetchCol("orders");
+    const pageViews = fetchCol("pageViews");
 
-    // Calcula indicadores
-    const ganhos         = deals.filter(d => d.status === 'Ganho');
-    const qtdVendas      = ganhos.length;
-    const contasPagar    = expenses.filter(e => e.status === 'Pendente').reduce((s, e) => s + Number(e.amount || 0), 0);
-    const nomesClientes  = ganhos.map(d => d.client).filter(Boolean).join(', ');
-    const salesGoal      = 30500; // meta padrão (ajuste conforme necessário)
-    const totalVendas    = ganhos.reduce((s, d) => s + Number(d.value || 0), 0);
-    const percentualMeta = salesGoal > 0 ? ((totalVendas / salesGoal) * 100).toFixed(1) + '%' : '0%';
+    const mesesLabels = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    const currentYear = new Date().getFullYear();
 
-    // Calcula pecas vendidas e produtos
-    let totalPecas = 0;
-    const produtosVendidosSet = new Set();
-    ganhos.forEach(d => {
-      try {
-        const prods = typeof d.products === 'string' ? JSON.parse(d.products) : (d.products || []);
-        prods.forEach(p => {
-          totalPecas += Number(p.quantity || 0);
-          produtosVendidosSet.add(p.name);
+    const dadosMensais = mesesLabels.map((mes, index) => {
+      let obj = { lucro: 0, despesas: 0, vendas: 0, pedidos: 0, clientes: 0, acessos: 0 };
+      
+      const isInMonth = (dateStr) => {
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        return d.getMonth() === index && d.getFullYear() === currentYear;
+      };
+
+      const mesExpenses = expenses.filter(e => isInMonth(e.dueDate) || isInMonth(e.date) || isInMonth(e.createdAt));
+      obj.despesas = mesExpenses.reduce((sum, e) => sum + (Number(e.amount || e.value) || 0), 0);
+
+      const mesDeals = deals.filter(d => d.status === 'Ganho' && (isInMonth(d.updatedAt) || isInMonth(d.date) || isInMonth(d.createdAt)));
+      const mesOrders = orders.filter(o => isInMonth(o.date) || isInMonth(o.createdAt));
+      obj.pedidos = mesOrders.length > 0 ? mesOrders.length : mesDeals.length;
+
+      obj.vendas = mesDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+      if (obj.vendas === 0) {
+        obj.vendas = mesOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      }
+      
+      obj.lucro = obj.vendas - obj.despesas;
+
+      const uniqueClients = new Set();
+      mesOrders.forEach(o => { if (o.customerCpf) uniqueClients.add(o.customerCpf); else if(o.customerName) uniqueClients.add(o.customerName); });
+      mesDeals.forEach(d => { if (d.customerCpf) uniqueClients.add(d.customerCpf); else if(d.customerName) uniqueClients.add(d.customerName); });
+      obj.clientes = uniqueClients.size;
+
+      const mesViews = pageViews.filter(v => isInMonth(v.timestamp));
+      obj.acessos = mesViews.length;
+
+      return obj;
+    });
+
+    // Encontrar e atualizar celulas baseadas nas labels.
+    // Presumindo Estrutura:
+    // Linha de Cabecalho (ex linha 1): [Vazio] | JAN | FEV | MAR | ...
+    // Linha de Lucro: LUCRO | valor | valor | ...
+    
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const firstCol = sheet.getRange(1, 1, Math.max(10, sheet.getLastRow()), 1).getValues().map(r => r[0].toString().toUpperCase().trim());
+
+    const updateMatrixRow = (rowLabel, metricKey) => {
+      const rowIndex = firstCol.findIndex(val => val.includes(rowLabel));
+      if (rowIndex !== -1) {
+        const rowToUpdate = [];
+        headers.forEach((h, colIndex) => {
+          if (colIndex === 0) return; // a label
+          const mesIndex = mesesLabels.indexOf(h.toString().toUpperCase().trim());
+          if (mesIndex !== -1) {
+            sheet.getRange(rowIndex + 1, colIndex + 1).setValue(dadosMensais[mesIndex][metricKey]);
+          }
         });
-      } catch(e) {}
-    });
-    const produtosVendidos = Array.from(produtosVendidosSet).join(', ');
+      }
+    };
 
-    // Aniversariantes (clientes com birthday no mês atual)
-    const mesAtual = new Date().getMonth() + 1;
-    const custResp = UrlFetchApp.fetch(
-      "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/customers",
-      { muteHttpExceptions: true }
-    );
-    const custData = JSON.parse(custResp.getContentText());
-    const customers = (custData.documents || []).map(d => parseFirestoreDoc(d));
-    const aniversariantes = customers
-      .filter(c => { try { return new Date((c.birthDate || c.birthday) + 'T12:00:00').getMonth() + 1 === mesAtual; } catch(e) { return false; } })
-      .map(c => c.name)
-      .join(', ');
+    updateMatrixRow("LUCRO", "lucro");
+    updateMatrixRow("DESPESA", "despesas");
+    updateMatrixRow("VENDA", "vendas");
+    updateMatrixRow("PEDIDO", "pedidos");
+    updateMatrixRow("CLIENTE", "clientes");
+    updateMatrixRow("ACESS", "acessos"); // Corresponde a "Nº QUE ACESSARAM..."
+    
+    Logger.log("Finanças e Crescimento (Matriz) atualizada.");
 
-    // Snapshot: limpa e escreve uma linha de resumo
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
-
-    sheet.appendRow([
-      qtdVendas,        // QUANTIDAD DE VENDAS
-      contasPagar,      // CONTAS A PAGAR (R$)
-      nomesClientes,    // NOME DOS CLIENTES
-      aniversariantes,  // ANIVERSÁRIO (aniversariantes do mes)
-      salesGoal,        // METAS (R$)
-      percentualMeta,   // PERCENTUAL DE METAS ATINGIDAS
-      totalPecas,       // PEÇAS VENDIDAS
-      produtosVendidos  // NOEM DOS PRODUTOS VENDIDOS
-    ]);
-    Logger.log("Vendas e controle atualizado.");
-
-  } catch (e) { Logger.log("Erro vendas controle: " + e.message); }
+  } catch (e) { Logger.log("Erro financas matriz: " + e.message); }
 }
 
+
 // ============================================================
-//  5. COMPRAS FINALIZADAS - orders Recebido (deleta)
-//  Colunas reais: N° DO PROTOCOLO | CLIENTE | PRODUTO |
-//    QUANTIDADE | METODO DE PAGAMENTO | LOCAL DE COMPRA |
-//    DATA E HORA | VENDEDOR | CODIGO DA NOTA FISCAL
+//  FUNCOES LEGAIS ESPECIAIS (Indicadores e Controle)
 // ============================================================
-
-function arquivarComprasFinalizadas() {
-  const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/orders";
-  try {
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return;
-    const data = JSON.parse(response.getContentText());
-    if (!data.documents) return;
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaCompras);
-    if (!sheet) return;
-
-    data.documents.forEach(doc => {
-      const order = parseFirestoreDoc(doc);
-      if (order.status !== 'Recebido') return;
-
-      let prodStr = '';
-      let qtdTotal = 0;
-      try {
-        const prods = typeof order.products === 'string' ? JSON.parse(order.products) : (order.products || []);
-        qtdTotal = prods.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
-        prodStr = prods.map(p => p.quantity + "x " + p.name + " (SKU: " + p.sku + ")").join(" | ");
-      } catch(err) { prodStr = String(order.products || ''); }
-
-      sheet.appendRow([
-        order.id          || '',                          // N° DO PROTOCOLO
-        order.supplier    || '',                          // CLIENTE (fornecedor)
-        prodStr,                                          // PRODUTO
-        qtdTotal,                                         // QUANTIDADE
-        order.paymentMethod || '',                        // METODO DE PAGAMENTO
-        order.location    || 'Fornecedor',                // LOCAL DE COMPRA
-        order.issueDate   || order.date || '',            // DATA E HORA
-        order.salesperson || '',                          // VENDEDOR
-        order.document    || ''                           // CODIGO DA NOTA FISCAL
-      ]);
-      deletarDocumento(doc.name);
-      Logger.log("Compra finalizada: " + order.supplier);
-    });
-
-  } catch (e) { Logger.log("Erro compras: " + e.message); }
+function atualizarVendasControle() {
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName(CONFIG.abaVendas);
+      if (!sheet) return;
+  
+      const fetchCol = (c) => JSON.parse(UrlFetchApp.fetch("https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/" + c, { muteHttpExceptions: true }).getContentText()).documents || [];
+      const deals = fetchCol('deals').map(parseFirestoreDoc);
+      const expenses = fetchCol('expenses').map(parseFirestoreDoc);
+      const customers = fetchCol('customers').map(parseFirestoreDoc);
+  
+      const ganhos = deals.filter(d => d.status === 'Ganho');
+      const contasPagar = expenses.filter(e => e.status === 'Pendente').reduce((s, e) => s + Number(e.amount || 0), 0);
+      const salesGoal = 30500;
+  
+      // Aniversariantes: compara mes e dia com hoje
+      const hoje = new Date();
+      const mesAtual = hoje.getMonth();    // 0-11
+      const diaAtual = hoje.getDate();
+      
+      const aniversariantesHoje = customers.filter(c => {
+        try {
+          const dtNasc = c.birthDate || c.birthday;
+          if (!dtNasc) return false;
+          const d = new Date(dtNasc + 'T12:00:00');
+          return d.getMonth() === mesAtual && d.getDate() === diaAtual;
+        } catch(e) { return false; }
+      });
+      
+      // Tambem calcula aniversariantes do mes inteiro para lembrete geral
+      const aniversariantesMes = customers.filter(c => {
+        try {
+          const dtNasc = c.birthDate || c.birthday;
+          if (!dtNasc) return false;
+          const d = new Date(dtNasc + 'T12:00:00');
+          return d.getMonth() === mesAtual;
+        } catch(e) { return false; }
+      });
+      
+      let aniversariantesStr = '';
+      if (aniversariantesHoje.length > 0) {
+        aniversariantesStr = '🎂 HOJE: ' + aniversariantesHoje.map(c => c.name).join(', ');
+      } else if (aniversariantesMes.length > 0) {
+        aniversariantesStr = 'Neste mês: ' + aniversariantesMes.map(c => {
+          const dt = new Date((c.birthDate || c.birthday) + 'T12:00:00');
+          return c.name + ' (' + dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ')';
+        }).join(' | ');
+      }
+  
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+  
+      ganhos.forEach(d => {
+        let totalPecasPedido = 0;
+        let produtosPedidoStr = "";
+        try {
+          const prods = typeof d.products === 'string' ? JSON.parse(d.products) : (d.products || []);
+          totalPecasPedido = prods.reduce((acc, p) => acc + Number(p.quantity || 0), 0);
+          produtosPedidoStr = prods.map(p => p.quantity + "x " + p.name).join(', ');
+        } catch(e) {}
+        
+        const valorPedido = Number(d.value || 0);
+        const percentualPedido = salesGoal > 0 ? ((valorPedido / salesGoal) * 100).toFixed(3) + '%' : '0%';
+        
+        sheet.appendRow([
+          1,                  // QUANTIDADE DE VENDAS (1 pedido = 1 linha)
+          contasPagar,        // CONTAS A PAGAR
+          d.client || '',     // NOME DOS CLIENTES
+          aniversariantesStr, // ANIVERSÁRIO
+          salesGoal,          // METAS
+          percentualPedido,   // PERCENTUAL DE METAS ATINGIDAS
+          totalPecasPedido,   // PEÇAS VENDIDAS
+          produtosPedidoStr   // NOME DOS PRODUTOS VENDIDOS
+        ]);
+      });
+    } catch (e) { Logger.log("Erro vendas controle: " + e.message); }
 }
-
-// ============================================================
-//  6. ESTOQUE ATUAL - snapshot dos items (sem deletar)
-//  Colunas reais: SKU | Produto | Preço Unit. | Localização |
-//                 Quantidade | Status
-// ============================================================
-
-function atualizarEstoqueAtual() {
-  const url = "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/items";
-  try {
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return;
-    const data = JSON.parse(response.getContentText());
-    if (!data.documents) return;
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.abaEstoque);
-    if (!sheet) return;
-
-    // Snapshot: limpa e reescreve
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
-
-    data.documents.forEach(doc => {
-      const item = parseFirestoreDoc(doc);
-      const qty = Number(item.quantity || 0);
-      const status = qty <= 5 ? 'Estoque Critico' : qty <= 20 ? 'Estoque Baixo' : 'Em Estoque';
-
-      sheet.appendRow([
-        item.sku      || '', // SKU
-        item.name     || '', // Produto
-        item.price    || 0,  // Preço Unit.
-        item.location || '', // Localização
-        qty,                 // Quantidade
-        status               // Status
-      ]);
-    });
-    Logger.log("Estoque atual atualizado: " + data.documents.length + " SKUs.");
-
-  } catch (e) { Logger.log("Erro estoque: " + e.message); }
-}
-
-// ============================================================
-//  7. INDICADORES - produtos mais vendidos (snapshot)
-//  Colunas reais: Produto | SKU | Quantidade VENDIDA |
-//                 Valor Vendido (Saídas) | Ação Recomendada
-// ============================================================
 
 function atualizarIndicadores() {
   try {
@@ -438,23 +450,9 @@ function atualizarIndicadores() {
     const sheet = ss.getSheetByName(CONFIG.abaIndicadores);
     if (!sheet) return;
 
-    // Busca items para cruzar com vendas
-    const itemsResp = UrlFetchApp.fetch(
-      "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/items",
-      { muteHttpExceptions: true }
-    );
-    const itemsData = JSON.parse(itemsResp.getContentText());
-    const items = (itemsData.documents || []).map(d => parseFirestoreDoc(d));
+    const items = JSON.parse(UrlFetchApp.fetch("https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/items", { muteHttpExceptions: true }).getContentText()).documents.map(parseFirestoreDoc);
+    const deals = JSON.parse(UrlFetchApp.fetch("https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/deals", { muteHttpExceptions: true }).getContentText()).documents.map(parseFirestoreDoc).filter(d => d.status === 'Ganho');
 
-    // Busca deals (Ganho) para calcular vendas por produto
-    const dealsResp = UrlFetchApp.fetch(
-      "https://firestore.googleapis.com/v1/projects/" + CONFIG.projectId + "/databases/(default)/documents/deals",
-      { muteHttpExceptions: true }
-    );
-    const dealsData = JSON.parse(dealsResp.getContentText());
-    const deals = (dealsData.documents || []).map(d => parseFirestoreDoc(d)).filter(d => d.status === 'Ganho');
-
-    // Agrega vendas por SKU
     const vendidoPorSku = {};
     deals.forEach(d => {
       try {
@@ -467,51 +465,31 @@ function atualizarIndicadores() {
       } catch(e) {}
     });
 
-    // Snapshot: limpa e reescreve
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
 
-    // Escreve um item por linha, ordenado por mais vendido
     const skusSorted = Object.keys(vendidoPorSku).sort((a, b) => vendidoPorSku[b].qtd - vendidoPorSku[a].qtd);
 
     skusSorted.forEach(sku => {
       const v = vendidoPorSku[sku];
       const itemData = items.find(i => i.sku === sku);
       const estoqueAtual = itemData ? Number(itemData.quantity || 0) : 0;
-
       let acao = 'Estoque Adequado';
       if (estoqueAtual <= 5)  acao = 'REPOSICAO IMEDIATA';
       else if (estoqueAtual <= 20) acao = 'Monitorar Estoque';
-
-      sheet.appendRow([
-        v.nome,         // Produto
-        sku,            // SKU
-        v.qtd,          // Quantidade VENDIDA
-        v.valor,        // Valor Vendido (Saidas)
-        acao            // Ação Recomendada
-      ]);
+      sheet.appendRow([v.nome, sku, v.qtd, v.valor, acao]);
     });
 
-    // Adiciona itens nao vendidos com estoque
     items.forEach(item => {
-      if (vendidoPorSku[item.sku]) return; // ja foi listado
-      const qty = Number(item.quantity || 0);
-      sheet.appendRow([
-        item.name  || '', // Produto
-        item.sku   || '', // SKU
-        0,                // Quantidade VENDIDA
-        0,                // Valor Vendido
-        'Sem vendas'      // Ação Recomendada
-      ]);
+      if (vendidoPorSku[item.sku]) return;
+      sheet.appendRow([item.name || '', item.sku || '', 0, 0, 'Sem vendas']);
     });
-
-    Logger.log("Indicadores atualizados.");
-
   } catch (e) { Logger.log("Erro indicadores: " + e.message); }
 }
 
+
 // ============================================================
-//  UTILITARIOS
+//  UTILITARIOS FIRESTORE
 // ============================================================
 
 function deletarDocumento(documentName) {
@@ -522,6 +500,7 @@ function deletarDocumento(documentName) {
 }
 
 function parseFirestoreDoc(doc) {
+  if (!doc) return {};
   const parsed = {};
   const fields = doc.fields;
   for (let key in fields) {
@@ -530,10 +509,6 @@ function parseFirestoreDoc(doc) {
   return parsed;
 }
 
-/**
- * Converte um valor do formato Firestore REST API para valor nativo JS.
- * Suporta: string, integer, double, boolean, array, map, null, timestamp.
- */
 function parseFirestoreValue(value) {
   if (value.hasOwnProperty("stringValue"))    return value.stringValue;
   if (value.hasOwnProperty("integerValue"))   return Number(value.integerValue);
@@ -542,13 +517,11 @@ function parseFirestoreValue(value) {
   if (value.hasOwnProperty("nullValue"))      return null;
   if (value.hasOwnProperty("timestampValue")) return value.timestampValue;
 
-  // Array: converte cada item recursivamente
   if (value.hasOwnProperty("arrayValue")) {
     const items = (value.arrayValue.values || []);
     return items.map(function(v) { return parseFirestoreValue(v); });
   }
 
-  // Map: converte cada campo recursivamente
   if (value.hasOwnProperty("mapValue")) {
     const result = {};
     const fields = value.mapValue.fields || {};
@@ -557,7 +530,5 @@ function parseFirestoreValue(value) {
     }
     return result;
   }
-
-  // Fallback seguro
   return JSON.stringify(value);
 }

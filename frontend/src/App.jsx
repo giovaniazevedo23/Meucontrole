@@ -26,6 +26,7 @@ function App() {
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [pageViews, setPageViews] = useState([]);
   const [activeTab, setActiveTab] = useState('estoque'); // 'estoque', 'movimentacoes', 'relatorios', 'compras'
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,6 +168,11 @@ function App() {
       setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const pageViewsQ = query(collection(db, 'pageViews'), where('companyCnpj', '==', activeCnpj));
+    const unsubPageViews = onSnapshot(pageViewsQ, (snap) => {
+      setPageViews(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubComp = onSnapshot(collection(db, 'companies'), (snap) => {
       setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -189,6 +195,7 @@ function App() {
       unsubExpenses();
       unsubDev();
       unsubOrders();
+        unsubPageViews();
       unsubComp();
     };
   }, [currentUser]);
@@ -594,6 +601,19 @@ function App() {
     setIsOfferModalOpen(false);
     setOfferFormData({ itemId: '', offerPrice: 0, hours: 24 });
     alert('Oferta relâmpago adicionada com sucesso!');
+  };
+
+  const handleRemoveOffer = async (item) => {
+    if (!window.confirm(`Retirar oferta do produto "${item.name}"? O preço voltará para R$ ${Number(item.originalPrice || item.price).toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`)) return;
+    const updatedItem = {
+      ...item,
+      price: item.originalPrice || item.price,
+      isOffer: false,
+      offerEndsAt: null,
+      originalPrice: null
+    };
+    await setDoc(doc(db, 'items', item.id), updatedItem);
+    alert('Oferta retirada com sucesso!');
   };
 
   const handleSendBirthday = async (customer) => {
@@ -1774,6 +1794,16 @@ function App() {
                       }} title="Ajuste Geral" style={{ fontSize: '1rem' }}>
                         ⚙️
                       </button>
+                      {item.isOffer && (
+                        <button 
+                          className="btn-secondary" 
+                          onClick={() => handleRemoveOffer(item)} 
+                          title="Retirar Oferta"
+                          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                        >
+                          🚫 Retirar Oferta
+                        </button>
+                      )}
                       <button className="btn-danger" onClick={() => handleDelete(item.id)}>
                         Excluir
                       </button>
@@ -1849,15 +1879,15 @@ function App() {
 
         {activeTab === 'relatorios' && (() => {
           // Calculate ABC Curve data
-          const totalSalesValue = items.reduce((sum, item) => sum + ((item.sold || 0) * item.price), 0);
+          const totalInventoryValue = items.reduce((sum, item) => sum + ((item.quantity || 0) * item.price), 0);
           let accumulatedValue = 0;
           
           const abcItems = [...items]
-            .map(item => ({ ...item, totalValue: (item.sold || 0) * item.price }))
+            .map(item => ({ ...item, totalValue: (item.quantity || 0) * item.price }))
             .sort((a, b) => b.totalValue - a.totalValue)
             .map(item => {
               accumulatedValue += item.totalValue;
-              const accumulatedPercentage = totalSalesValue > 0 ? (accumulatedValue / totalSalesValue) * 100 : 0;
+              const accumulatedPercentage = totalInventoryValue > 0 ? (accumulatedValue / totalInventoryValue) * 100 : 0;
               let curva = 'C';
               if (accumulatedPercentage <= 80) curva = 'A';
               else if (accumulatedPercentage <= 95) curva = 'B';
@@ -1871,9 +1901,9 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {/* Curva ABC */}
               <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
-                <h3 style={{ marginBottom: '0.5rem' }}>Curva ABC (Por Volume de Vendas)</h3>
+                <h3 style={{ marginBottom: '0.5rem' }}>Curva ABC (Por Valor em Estoque)</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', marginTop: 0 }}>
-                  Curva A (Top 80% do valor), Curva B (Próximos 15%), Curva C (Últimos 5%). Produtos da Curva A exigem atenção máxima!
+                  Curva A (Top 80% do valor acumulado), Curva B (Próximos 15%), Curva C (Últimos 5%). Produtos da Curva A representam a maior parte do seu investimento em estoque!
                 </p>
                 <div className="table-container">
                   <table>
@@ -2060,6 +2090,7 @@ function App() {
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
                   <button className={crmTab === 'dashboard' ? 'btn-primary' : 'btn-secondary'} onClick={() => setCrmTab('dashboard')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Dashboard de Vendas</button>
                   <button className={crmTab === 'funil' ? 'btn-primary' : 'btn-secondary'} onClick={() => setCrmTab('funil')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Funil de Negociações (Kanban)</button>
+                    <button className={crmTab === 'graficos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setCrmTab('graficos')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Gráficos de Finanças e Crescimento</button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
@@ -2282,7 +2313,107 @@ function App() {
               </div>
             )}
 
-            {crmTab === 'funil' && (
+            
+              {crmTab === 'graficos' && (() => {
+                // Processamento dos dados para os gráficos
+                const months = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+                const currentYear = new Date().getFullYear();
+                
+                // Mapear dados para os 12 meses
+                const chartData = months.map((month, index) => {
+                  let monthData = { name: month, lucro: 0, despesas: 0, vendas: 0, pedidos: 0, clientes: 0, acessos: 0 };
+                  
+                  // Filtrar por mês e ano atual
+                  const isInMonth = (dateStr) => {
+                    if (!dateStr) return false;
+                    const d = new Date(dateStr);
+                    return d.getMonth() === index && d.getFullYear() === currentYear;
+                  };
+
+                  // Despesas
+                  const monthExpenses = expenses.filter(e => isInMonth(e.dueDate) || isInMonth(e.date) || isInMonth(e.createdAt));
+                  monthData.despesas = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount || e.value) || 0), 0);
+                  
+                  // Pedidos (Usamos os negócios ganhos ou pedidos registrados)
+                  const monthDeals = deals.filter(d => d.status === 'Ganho' && (isInMonth(d.updatedAt) || isInMonth(d.date) || isInMonth(d.createdAt)));
+                  const monthOrders = orders.filter(o => isInMonth(o.date) || isInMonth(o.createdAt));
+                  monthData.pedidos = monthOrders.length > 0 ? monthOrders.length : monthDeals.length;
+                  
+                  // Vendas (Valor total dos pedidos ou negócios ganhos)
+                  monthData.vendas = monthDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
+                  
+                  if (monthData.vendas === 0) {
+                    monthData.vendas = monthOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+                  }
+
+                  // Lucro
+                  monthData.lucro = monthData.vendas - monthData.despesas;
+
+                  // Clientes
+                  const uniqueClients = new Set();
+                  monthOrders.forEach(o => {
+                    if (o.customerCpf) uniqueClients.add(o.customerCpf);
+                    else if (o.customerName) uniqueClients.add(o.customerName);
+                  });
+                  monthDeals.forEach(d => {
+                    if (d.customerCpf) uniqueClients.add(d.customerCpf);
+                    else if (d.customerName) uniqueClients.add(d.customerName);
+                  });
+                  monthData.clientes = uniqueClients.size;
+
+                  // Acessos
+                  const monthViews = pageViews.filter(v => isInMonth(v.timestamp));
+                  monthData.acessos = monthViews.length;
+
+                  return monthData;
+                });
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', marginBottom: '2rem' }}>
+                    
+                    {/* Tabela/Gráfico de Finanças */}
+                    <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+                      <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--text-primary)' }}>Finanças (Ano Atual)</h3>
+                      <div style={{ width: '100%', height: '400px' }}>
+                        <ResponsiveContainer>
+                          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip formatter={(value) => 'R$ ' + value.toLocaleString('pt-BR', {minimumFractionDigits: 2})} />
+                            <Legend />
+                            <Line type="monotone" name="Lucro" dataKey="lucro" stroke="#10b981" strokeWidth={2} />
+                            <Line type="monotone" name="Despesas" dataKey="despesas" stroke="#ef4444" strokeWidth={2} />
+                            <Line type="monotone" name="Vendas" dataKey="vendas" stroke="#3b82f6" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Tabela/Gráfico de Crescimento */}
+                    <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+                      <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--text-primary)' }}>Crescimento (Ano Atual)</h3>
+                      <div style={{ width: '100%', height: '400px' }}>
+                        <ResponsiveContainer>
+                          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" name="Nº de Pedidos" dataKey="pedidos" stroke="#8b5cf6" strokeWidth={2} />
+                            <Line type="monotone" name="Nº de Clientes" dataKey="clientes" stroke="#f59e0b" strokeWidth={2} />
+                            <Line type="monotone" name="Nº de Acessos ao Site" dataKey="acessos" stroke="#06b6d4" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })()}
+
+              {crmTab === 'funil' && (
               <>
                 <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
                   <div className="glass-panel" style={{ flex: '1 1 400px', padding: '1.5rem', borderRadius: '1rem', display: 'flex', flexDirection: 'column' }}>
