@@ -1539,7 +1539,7 @@ function App() {
           <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
             Lojas
           </button>
-          <button className={activeTab === 'config-nfe' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('config-nfe')} style={activeTab !== 'config-nfe' ? { color: 'var(--text-primary)' } : {}}>
+          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>
             Configurações NFe
           </button>
         </nav>
