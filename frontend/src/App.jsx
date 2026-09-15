@@ -23,6 +23,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
   const [loginMode, setLoginMode] = useState('login'); // 'login' | 'register'
   const [loginData, setLoginData] = useState({ name: '', email: '', cpf: '', company: '', companyCnpj: '', role: 'Vendedor', phone: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   const [items, setItems] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -798,17 +799,27 @@ function App() {
           }
 
         const userDoc = {
-          name: loginData.name,
-          email: loginData.email,
-          cpf: loginData.cpf,
-          company: loginData.company,
-          companyCnpj: loginData.companyCnpj,
-          role: loginData.role,
-          phone: loginData.phone || '',
-          createdAt: new Date().toISOString()
-        };
-        await setDoc(doc(db, 'users', cpfClean), userDoc);
-        setCurrentUser({...userDoc});
+            name: loginData.name,
+            email: loginData.email,
+            cpf: loginData.cpf,
+            company: loginData.company,
+            companyCnpj: loginData.companyCnpj,
+            role: loginData.role,
+            phone: loginData.phone || '',
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(doc(db, 'users', cpfClean), userDoc);
+          
+          if (loginData.companyCnpj && loginData.company) {
+             const compRef = doc(db, 'companies', loginData.companyCnpj.replace(/\D/g, ''));
+             await setDoc(compRef, {
+                 name: loginData.company,
+                 cnpj: loginData.companyCnpj,
+                 createdAt: new Date().toISOString()
+             }, { merge: true });
+          }
+
+          setCurrentUser({...userDoc});
 
         try {
           const sellerWelcomeHtml = `
@@ -1306,16 +1317,20 @@ function App() {
                         onChange={e => setLoginData({...loginData, email: e.target.value})}
                       />
                     </div>
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>Senha</label>
-                      <input 
-                        type="password" 
-                        required 
-                        placeholder="Sua senha"
-                        value={loginData.password}
-                        onChange={e => setLoginData({...loginData, password: e.target.value})}
-                      />
-                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                        <label>Senha</label>
+                        <input 
+                          type={showPassword ? "text" : "password"} 
+                          required 
+                          placeholder="Sua senha"
+                          value={loginData.password}
+                          onChange={e => setLoginData({...loginData, password: e.target.value})}
+                          style={{ paddingRight: '40px' }}
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '10px', top: '38px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>
+                            {showPassword ? '🙈' : '👁️'}
+                        </button>
+                      </div>
                   </>
                 )}
                 {loginMode === 'register' && (
@@ -1340,16 +1355,20 @@ function App() {
                         onChange={e => setLoginData({...loginData, email: e.target.value})}
                       />
                     </div>
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>Senha</label>
-                      <input 
-                        type="password" 
-                        required 
-                        placeholder="Crie uma senha (mínimo 6 caracteres)"
-                        value={loginData.password}
-                        onChange={e => setLoginData({...loginData, password: e.target.value})}
-                      />
-                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                        <label>Senha</label>
+                        <input 
+                          type={showPassword ? "text" : "password"} 
+                          required 
+                          placeholder="Crie uma senha (mínimo 6 caracteres)"
+                          value={loginData.password}
+                          onChange={e => setLoginData({...loginData, password: e.target.value})}
+                          style={{ paddingRight: '40px' }}
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '10px', top: '38px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>
+                            {showPassword ? '🙈' : '👁️'}
+                        </button>
+                      </div>
                   </>
                 )}
                 
@@ -3063,15 +3082,66 @@ function App() {
                   onChange={e => setNewItem({...newItem, name: e.target.value})}
                 />
               </div>
-              <div className="form-group">
-                <label>SKU</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={newItem.sku}
-                  onChange={e => setNewItem({...newItem, sku: e.target.value})}
-                />
-              </div>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    SKU do Produto
+                    <button type="button" onClick={() => setSkuGenOpen(!skuGenOpen)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                      {skuGenOpen ? 'Ocultar Gerador' : '✨ Usar Gerador Automático'}
+                    </button>
+                  </label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={newItem.sku}
+                    onChange={e => setNewItem({...newItem, sku: e.target.value.toUpperCase()})}
+                    placeholder="Digite ou gere o código do produto"
+                  />
+                  {skuGenOpen && (
+                    <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', color: 'var(--text-primary)', fontSize: '0.9rem' }}>Gerador Inteligente de SKU</h4>
+                      
+                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '0.8rem' }}>Caracteres</label>
+                          <select value={skuGen.chars} onChange={e => setSkuGen({...skuGen, chars: parseInt(e.target.value)})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
+                            <option value={2}>2</option>
+                            <option value={3}>3</option>
+                            <option value={4}>4</option>
+                            <option value={5}>5</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '0.8rem' }}>Separador</label>
+                          <select value={skuGen.sep} onChange={e => setSkuGen({...skuGen, sep: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
+                            <option value="">Nenhum</option>
+                            <option value="-">Hífen (-)</option>
+                            <option value="/">Barra (/)</option>
+                            <option value="_">Underline (_)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        <div>
+                          <input type="text" placeholder="Nome (Ex: Caneca)" value={skuGen.name} onChange={e => setSkuGen({...skuGen, name: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                        </div>
+                        <div>
+                          <input type="text" placeholder="Característica 01 (Ex: 310ml)" value={skuGen.char1} onChange={e => setSkuGen({...skuGen, char1: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                        </div>
+                        <div>
+                          <input type="text" placeholder="Característica 02 (Ex: Vermelha)" value={skuGen.char2} onChange={e => setSkuGen({...skuGen, char2: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                        </div>
+                        <div>
+                          <input type="text" placeholder="Característica 03 (Ex: Porcelana)" value={skuGen.char3} onChange={e => setSkuGen({...skuGen, char3: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                        </div>
+                      </div>
+
+                      <button type="button" onClick={generateSku} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+                        Gerar e Aplicar Código
+                      </button>
+                    </div>
+                  )}
+                </div>
               <div className="form-group">
                 <label>Categoria</label>
                 <select 
@@ -3782,7 +3852,34 @@ function App() {
             </div>
             
             <div className="form-group">
-              <label>Seu Nome</label>
+                <label>Seu E-mail (Acesso)</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input 
+                    type="email" 
+                    value={currentUser.email || ''} 
+                    disabled 
+                    style={{ flex: 1, backgroundColor: '#f5f5f5', color: '#888' }} 
+                  />
+                  <button 
+                    type="button"
+                    className="btn-secondary"
+                    onClick={async () => {
+                      if (!currentUser.email) return;
+                      try {
+                        await sendPasswordResetEmail(auth, currentUser.email);
+                        alert('Um e-mail para redefinição de senha foi enviado para ' + currentUser.email);
+                      } catch (err) {
+                        alert('Erro ao enviar e-mail: ' + err.message);
+                      }
+                    }}
+                    style={{ padding: '0 15px', whiteSpace: 'nowrap' }}
+                  >
+                    Redefinir Senha
+                  </button>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginTop: '1rem' }}>
+                <label>Seu Nome</label>
               <input 
                 type="text" 
                 value={tempProfile.name}
