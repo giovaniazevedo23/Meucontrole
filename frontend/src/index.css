@@ -94,14 +94,15 @@ h1, h2, h3 {
     flex-wrap: nowrap !important;
   }
   
-  .responsive-admin-login-form-container {
-    flex: 1;
-    padding: 4rem 3rem !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    background: #ffffff !important;
-  }
+    .responsive-admin-login-form-container {
+      flex: 1;
+      padding: 3rem 4rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: flex-start !important;
+      background: #ffffff !important;
+      overflow-y: auto !important;
+    }
 
   .responsive-admin-login-image {
     display: block;
