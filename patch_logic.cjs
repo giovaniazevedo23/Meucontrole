@@ -9,19 +9,9 @@ if (!app.includes('firebase/auth')) {
   );
 }
 
-// Rewrite login mode to use Firebase Auth
-const oldLoginLogic = `    if (loginMode === 'login') {
-      const userRef = doc(db, 'users', cpfClean);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setCurrentUser({...userData, companyCnpj: userData.companyCnpj || '00.000.000/0001-00'});
-      } else {
-        alert("Usuário não encontrado. Por favor, faça o cadastro.");
-      }
-    } else {`;
-
-const newLoginLogic = `    if (loginMode === 'login') {
+// Replace Login Block
+const loginRegex = /if \(loginMode === 'login'\) \{[\s\S]*?alert\("Usuário não encontrado. Por favor, faça o cadastro."\);\s*\}\s*\} else \{/m;
+const newLogin = `if (loginMode === 'login') {
       try {
         if (!loginData.email || !loginData.password) {
           alert('Por favor, preencha E-mail e Senha para entrar.');
@@ -35,7 +25,7 @@ const newLoginLogic = `    if (loginMode === 'login') {
           const userData = userSnap.data();
           setCurrentUser({...userData, companyCnpj: userData.companyCnpj || '00.000.000/0001-00'});
         } else {
-          alert("Dados adicionais do usuário não encontrados no banco.");
+          alert('Dados adicionais não encontrados no banco.');
         }
       } catch (error) {
         console.error(error);
@@ -43,21 +33,15 @@ const newLoginLogic = `    if (loginMode === 'login') {
       }
     } else {`;
 
-app = app.replace(oldLoginLogic, newLoginLogic);
+if (loginRegex.test(app)) {
+    app = app.replace(loginRegex, newLogin);
+} else {
+    console.error("Login block not found!");
+}
 
-// Rewrite register logic to use Firebase Auth
-const oldRegLogic = `        const emailQuery = query(collection(db, 'users'), where('email', '==', loginData.email));
-        const emailSnap = await getDocs(emailQuery);
-        if (!emailSnap.empty) {
-          alert('Esse E-mail já está vinculado a outro cadastro.');
-          return;
-        }
-
-        const userDoc = {
-          name: loginData.name,
-          email: loginData.email,`;
-
-const newRegLogic = `        const emailQuery = query(collection(db, 'users'), where('email', '==', loginData.email));
+// Replace Register Block
+const regRegex = /const emailQuery = query\(collection\(db, 'users'\), where\('email', '==', loginData\.email\)\);[\s\S]*?if \(!emailSnap\.empty\) \{[\s\S]*?alert\('Esse E-mail já está vinculado a outro cadastro.'\);\s*return;\s*\}/m;
+const newReg = `const emailQuery = query(collection(db, 'users'), where('email', '==', loginData.email));
         const emailSnap = await getDocs(emailQuery);
         if (!emailSnap.empty) {
           alert('Esse E-mail já está vinculado a outro cadastro.');
@@ -78,12 +62,13 @@ const newRegLogic = `        const emailQuery = query(collection(db, 'users'), w
              alert('Erro ao criar conta: ' + err.message);
           }
           return;
-        }
+        }`;
 
-        const userDoc = {
-          name: loginData.name,
-          email: loginData.email,`;
-
-app = app.replace(oldRegLogic, newRegLogic);
+if (regRegex.test(app)) {
+    app = app.replace(regRegex, newReg);
+} else {
+    console.error("Register block not found!");
+}
 
 fs.writeFileSync('frontend/src/App.jsx', app, 'utf8');
+console.log("Patch completed.");

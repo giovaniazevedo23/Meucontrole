@@ -746,13 +746,24 @@ function App() {
     const cpfClean = loginData.cpf.replace(/\D/g, '');
 
     if (loginMode === 'login') {
-      const userRef = doc(db, 'users', cpfClean);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setCurrentUser({...userData, companyCnpj: userData.companyCnpj || '00.000.000/0001-00'});
-      } else {
-        alert("Usuário não encontrado. Por favor, faça o cadastro.");
+      try {
+        if (!loginData.email || !loginData.password) {
+          alert('Por favor, preencha E-mail e Senha para entrar.');
+          return;
+        }
+        await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
+        
+        const userRef = doc(db, 'users', cpfClean);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          setCurrentUser({...userData, companyCnpj: userData.companyCnpj || '00.000.000/0001-00'});
+        } else {
+          alert('Dados adicionais não encontrados no banco.');
+        }
+      } catch (error) {
+        console.error(error);
+        alert('Credenciais inválidas. Verifique seu E-mail e Senha.');
       }
     } else {
       if (loginData.role === 'Vendedor' && !loginData.phone) {
@@ -772,6 +783,22 @@ function App() {
         const emailSnap = await getDocs(emailQuery);
         if (!emailSnap.empty) {
           alert('Esse E-mail já está vinculado a outro cadastro.');
+          return;
+        }
+
+        if (!loginData.password || loginData.password.length < 6) {
+          alert('A senha deve ter no mínimo 6 caracteres.');
+          return;
+        }
+
+        try {
+          await createUserWithEmailAndPassword(auth, loginData.email, loginData.password);
+        } catch(err) {
+          if (err.code === 'auth/email-already-in-use') {
+             alert('Este e-mail já está em uso no sistema de autenticação.');
+          } else {
+             alert('Erro ao criar conta: ' + err.message);
+          }
           return;
         }
 
