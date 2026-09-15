@@ -860,6 +860,8 @@ function App() {
         } catch (emailErr) {
           console.error("Erro ao enviar email de boas-vindas (vendedor):", emailErr);
         }
+      } else {
+        alert("Por favor, preencha TODOS os campos, incluindo Nome Completo!");
       }
     }
   };
