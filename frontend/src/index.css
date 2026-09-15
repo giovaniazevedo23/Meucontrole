@@ -60,38 +60,72 @@ h1, h2, h3 {
 }
 
 
-/* Responsive Admin Login Layout */
+
+/* Responsive Premium Admin Login Layout */
 .responsive-admin-login-wrapper {
   width: 100%;
   max-width: 450px !important;
   padding: 2.5rem !important;
   transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.responsive-admin-login-image {
+  display: none;
 }
 
 @media (min-width: 800px) {
   .responsive-admin-login-wrapper {
-    max-width: 800px !important;
+    max-width: 1000px !important;
+    padding: 0 !important;
     display: flex;
     flex-direction: row;
-    align-items: center;
-    gap: 3rem;
+    align-items: stretch;
+    min-height: 600px;
+    border-radius: 24px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
   }
-  .responsive-admin-login-brand {
+  
+  .responsive-admin-login-form-container {
     flex: 1;
+    padding: 4rem 3rem !important;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    border-right: 1px solid var(--glass-border);
-    padding-right: 3rem;
-    text-align: left !important;
+    background: var(--glass-bg);
   }
-  .responsive-admin-login-brand img {
-    margin-bottom: 1rem !important;
-  }
-  .responsive-admin-login-form {
+
+  .responsive-admin-login-image {
+    display: block;
     flex: 1.2;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    background-image: url('/login-hero.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+  }
+  
+  /* Add a subtle overlay to the image */
+  .responsive-admin-login-image::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(255,255,255,0.1), transparent);
+  }
+
+  .responsive-admin-login-brand {
+    text-align: left !important;
+    margin-bottom: 3rem !important;
+  }
+  
+  .responsive-admin-login-brand img {
+    height: 70px !important;
+    width: 70px !important;
+    margin-bottom: 1.5rem !important;
+  }
+  
+  .responsive-admin-login-brand h2 {
+    font-size: 2rem !important;
+    font-weight: 800;
   }
 }

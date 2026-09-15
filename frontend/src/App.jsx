@@ -1215,130 +1215,135 @@ function App() {
     return (
       <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', minHeight: '100vh', display: 'flex' }}>
         <div className="modal-content glass-panel responsive-admin-login-wrapper" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
-          <div className="responsive-admin-login-brand" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src={logo} alt="Logo GESTE" style={{ height: '60px', width: '60px', objectFit: 'cover', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
-            <h2 style={{ marginTop: '1rem', color: 'var(--text-primary)' }}>Bem-vindo ao GESTE</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>Faça login para acessar o sistema de estoque.</p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-            <button 
-              type="button" 
-              className={loginMode === 'login' ? 'btn-primary' : 'btn-secondary'} 
-              style={{ flex: 1, padding: '0.5rem' }} 
-              onClick={() => setLoginMode('login')}
-            >
-              Entrar
-            </button>
-            <button 
-              type="button" 
-              className={loginMode === 'register' ? 'btn-primary' : 'btn-secondary'} 
-              style={{ flex: 1, padding: '0.5rem' }} 
-              onClick={() => setLoginMode('register')}
-            >
-              Cadastrar
-            </button>
-          </div>
-
-          <form onSubmit={handleLogin}>
-            {loginMode === 'register' && (
-              <>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>E-mail</label>
-                  <input 
-                    type="email" 
-                    required 
-                    placeholder="Seu melhor e-mail"
-                    value={loginData.email}
-                    onChange={e => setLoginData({...loginData, email: e.target.value})}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>Nome Completo</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="Ex: João Silva"
-                    value={loginData.name}
-                    onChange={e => setLoginData({...loginData, name: e.target.value})}
-                  />
-                </div>
-              </>
-            )}
-            
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label>CPF</label>
-              <input 
-                type="text" 
-                required 
-                placeholder="000.000.000-00"
-                value={loginData.cpf}
-                onChange={handleCpfChange}
-                maxLength="14"
-              />
+          <div className="responsive-admin-login-form-container">
+            <div className="responsive-admin-login-brand" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <img src={logo} alt="Logo GESTE" style={{ height: '60px', width: '60px', objectFit: 'cover', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
+              <h2 style={{ marginTop: '1rem', color: 'var(--text-primary)' }}>Bem-vindo ao GESTE</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>Faça login para acessar o sistema de estoque.</p>
             </div>
 
-            {loginMode === 'register' && (
-              <>
-                <div className="form-group" style={{ marginBottom: '2rem' }}>
-                  <label>Nome da Empresa</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="Ex: Minha Empresa Ltda"
-                    value={loginData.company}
-                    onChange={e => setLoginData({...loginData, company: e.target.value})}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '2rem' }}>
-                  <label>CNPJ da Empresa</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="00.000.000/0000-00"
-                    value={loginData.companyCnpj}
-                    maxLength={18}
-                    onChange={e => {
-                      let v = e.target.value.replace(/\D/g, '');
-                      if (v.length > 14) v = v.slice(0, 14);
-                      v = v.replace(/^(\d{2})(\d)/, '$1.$2');
-                      v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-                      v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
-                      v = v.replace(/(\d{4})(\d)/, '$1-$2');
-                      setLoginData({...loginData, companyCnpj: v});
-                    }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '2rem' }}>
-                  <label>Cargo (Perfil de Acesso)</label>
-                  <select 
-                    value={loginData.role}
-                    onChange={e => setLoginData({...loginData, role: e.target.value})}
-                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
-                  >
-                    <option value="Vendedor">Vendedor</option>
-                    <option value="Gestor">Gestor</option>
-                    <option value="Administrador">Administrador</option>
-                  </select>
-                </div>
-                {loginData.role === 'Vendedor' && (
-                  <div className="form-group" style={{ marginBottom: '2rem' }}>
-                    <label>Seu WhatsApp</label>
-                    <input 
-                      type="text" 
-                      required 
-                      placeholder="(00) 00000-0000"
-                      value={loginData.phone}
-                      onChange={handlePhoneChangeAdmin}
-                    />
-                  </div>
+            <div className="responsive-admin-login-form">
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                <button 
+                  type="button" 
+                  className={loginMode === 'login' ? 'btn-primary' : 'btn-secondary'} 
+                  style={{ flex: 1, padding: '0.5rem' }} 
+                  onClick={() => setLoginMode('login')}
+                >
+                  Entrar
+                </button>
+                <button 
+                  type="button" 
+                  className={loginMode === 'register' ? 'btn-primary' : 'btn-secondary'} 
+                  style={{ flex: 1, padding: '0.5rem' }} 
+                  onClick={() => setLoginMode('register')}
+                >
+                  Cadastrar
+                </button>
+              </div>
+
+              <form onSubmit={handleLogin}>
+                {loginMode === 'register' && (
+                  <>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>E-mail</label>
+                      <input 
+                        type="email" 
+                        required 
+                        placeholder="Seu melhor e-mail"
+                        value={loginData.email}
+                        onChange={e => setLoginData({...loginData, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>Nome Completo</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Ex: João Silva"
+                        value={loginData.name}
+                        onChange={e => setLoginData({...loginData, name: e.target.value})}
+                      />
+                    </div>
+                  </>
                 )}
-              </>
-            )}
-            <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
-              {loginMode === 'login' ? 'Entrar no Sistema' : 'Criar Conta'}
-            </button>
-          </form>
+                
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>CPF</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="000.000.000-00"
+                    value={loginData.cpf}
+                    onChange={handleCpfChange}
+                    maxLength="14"
+                  />
+                </div>
+
+                {loginMode === 'register' && (
+                  <>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>Nome da Empresa</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Ex: Minha Empresa Ltda"
+                        value={loginData.company}
+                        onChange={e => setLoginData({...loginData, company: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>CNPJ da Empresa</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="00.000.000/0000-00"
+                        value={loginData.companyCnpj}
+                        maxLength={18}
+                        onChange={e => {
+                          let v = e.target.value.replace(/\D/g, '');
+                          if (v.length > 14) v = v.slice(0, 14);
+                          v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+                          v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                          v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                          v = v.replace(/(\d{4})(\d)/, '$1-$2');
+                          setLoginData({...loginData, companyCnpj: v});
+                        }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>Cargo (Perfil de Acesso)</label>
+                      <select 
+                        value={loginData.role}
+                        onChange={e => setLoginData({...loginData, role: e.target.value})}
+                        style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                      >
+                        <option value="Vendedor">Vendedor</option>
+                        <option value="Gestor">Gestor</option>
+                        <option value="Administrador">Administrador</option>
+                      </select>
+                    </div>
+                    {loginData.role === 'Vendedor' && (
+                      <div className="form-group" style={{ marginBottom: '2rem' }}>
+                        <label>Seu WhatsApp</label>
+                        <input 
+                          type="text" 
+                          required 
+                          placeholder="(00) 00000-0000"
+                          value={loginData.phone}
+                          onChange={handlePhoneChangeAdmin}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
+                  {loginMode === 'login' ? 'Entrar no Sistema' : 'Criar Conta'}
+                </button>
+              </form>
+            </div>
+          </div>
+          <div className="responsive-admin-login-image"></div>
         </div>
       </div>
     );
