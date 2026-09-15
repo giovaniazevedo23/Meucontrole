@@ -650,7 +650,7 @@ Tenha um dia incrível e cheio de alegrias!`);
 
   const handleSendBirthday = async (customer) => {
     // Gerar Cupom
-    const couponCode = `NIVER${customer.cpf.replace(/\D/g, '').slice(0, 4)}${Math.floor(Math.random() * 100)}`;
+    const couponCode = `ANIVERSARIO${Math.floor(1000 + Math.random() * 9000)}`;
     const newCoup = {
       id: Date.now().toString(),
       code: couponCode,
