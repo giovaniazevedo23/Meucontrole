@@ -751,6 +751,14 @@ function App() {
           alert('Esse CPF já está vinculado a outro cadastro.');
           return;
         }
+
+        const emailQuery = query(collection(db, 'users'), where('email', '==', loginData.email));
+        const emailSnap = await getDocs(emailQuery);
+        if (!emailSnap.empty) {
+          alert('Esse E-mail já está vinculado a outro cadastro.');
+          return;
+        }
+
         const userDoc = {
           name: loginData.name,
           email: loginData.email,
@@ -1246,16 +1254,6 @@ function App() {
                 {loginMode === 'register' && (
                   <>
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>E-mail</label>
-                      <input 
-                        type="email" 
-                        required 
-                        placeholder="Seu melhor e-mail"
-                        value={loginData.email}
-                        onChange={e => setLoginData({...loginData, email: e.target.value})}
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>Nome Completo</label>
                       <input 
                         type="text" 
@@ -1263,6 +1261,16 @@ function App() {
                         placeholder="Ex: João Silva"
                         value={loginData.name}
                         onChange={e => setLoginData({...loginData, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>E-mail</label>
+                      <input 
+                        type="email" 
+                        required 
+                        placeholder="Seu melhor e-mail"
+                        value={loginData.email}
+                        onChange={e => setLoginData({...loginData, email: e.target.value})}
                       />
                     </div>
                   </>
@@ -1312,6 +1320,16 @@ function App() {
                       />
                     </div>
                     <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>Seu WhatsApp</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="(00) 00000-0000"
+                        value={loginData.phone}
+                        onChange={handlePhoneChangeAdmin}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
                       <label>Cargo (Perfil de Acesso)</label>
                       <select 
                         value={loginData.role}
@@ -1323,18 +1341,6 @@ function App() {
                         <option value="Administrador">Administrador</option>
                       </select>
                     </div>
-                    {loginData.role === 'Vendedor' && (
-                      <div className="form-group" style={{ marginBottom: '2rem' }}>
-                        <label>Seu WhatsApp</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="(00) 00000-0000"
-                          value={loginData.phone}
-                          onChange={handlePhoneChangeAdmin}
-                        />
-                      </div>
-                    )}
                   </>
                 )}
                 <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
