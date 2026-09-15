@@ -1331,7 +1331,7 @@ function App() {
                     </div>
                     <div className="form-group" style={{ marginBottom: '1.5rem',  }}>
                         <label>Senha</label>
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative', width: '100%' }}>
                           <input 
                           type={showPassword ? "text" : "password"} 
                           required 
@@ -1371,7 +1371,7 @@ function App() {
                     </div>
                     <div className="form-group" style={{ marginBottom: '1.5rem',  }}>
                         <label>Senha</label>
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative', width: '100%' }}>
                           <input 
                           type={showPassword ? "text" : "password"} 
                           required 
