@@ -1214,9 +1214,9 @@ function App() {
   if (!currentUser) {
     return (
       <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', minHeight: '100vh', display: 'flex' }}>
-        <div className="modal-content glass-panel responsive-admin-login-wrapper" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
+        <div className="modal-content glass-panel responsive-admin-login-wrapper">
           <div className="responsive-admin-login-form-container">
-            <div className="responsive-admin-login-brand" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <div className="responsive-admin-login-brand">
               <img src={logo} alt="Logo GESTE" style={{ height: '60px', width: '60px', objectFit: 'cover', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} />
               <h2 style={{ marginTop: '1rem', color: 'var(--text-primary)' }}>Bem-vindo ao GESTE</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.5rem' }}>Faça login para acessar o sistema de estoque.</p>
