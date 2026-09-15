@@ -1267,6 +1267,30 @@ function App() {
               </div>
 
               <form onSubmit={handleLogin}>
+                {loginMode === 'login' && (
+                  <>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>E-mail</label>
+                      <input 
+                        type="email" 
+                        required 
+                        placeholder="Seu e-mail cadastrado"
+                        value={loginData.email}
+                        onChange={e => setLoginData({...loginData, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>Senha</label>
+                      <input 
+                        type="password" 
+                        required 
+                        placeholder="Sua senha"
+                        value={loginData.password}
+                        onChange={e => setLoginData({...loginData, password: e.target.value})}
+                      />
+                    </div>
+                  </>
+                )}
                 {loginMode === 'register' && (
                   <>
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
@@ -1287,6 +1311,16 @@ function App() {
                         placeholder="Seu melhor e-mail"
                         value={loginData.email}
                         onChange={e => setLoginData({...loginData, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>Senha</label>
+                      <input 
+                        type="password" 
+                        required 
+                        placeholder="Crie uma senha (mínimo 6 caracteres)"
+                        value={loginData.password}
+                        onChange={e => setLoginData({...loginData, password: e.target.value})}
                       />
                     </div>
                   </>
