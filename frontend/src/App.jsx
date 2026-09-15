@@ -47,6 +47,14 @@ function App() {
   const [newCoupon, setNewCoupon] = useState({ code: '', discount: 10, expireDate: '', minPurchaseValue: 0, usageLimit: '' });
   
   const [newItem, setNewItem] = useState({ name: '', sku: '', quantity: 0, location: '', price: 0, category: 'Tecnologia', imageUrl: '', imageUrls: [], freeShipping: false, deliveryDays: 3, allowInstallments: false, maxInstallments: 1, hasInterest: false, interestRate: 0 });
+  const [skuGenOpen, setSkuGenOpen] = useState(false);
+  const [skuGen, setSkuGen] = useState({ chars: 4, sep: '-', name: '', char1: '', char2: '', char3: '' });
+
+  const generateSku = () => {
+    let parts = [skuGen.name, skuGen.char1, skuGen.char2, skuGen.char3].filter(Boolean);
+    parts = parts.map(p => p.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, skuGen.chars));
+    setNewItem({...newItem, sku: parts.join(skuGen.sep)});
+  };
   const [newOrder, setNewOrder] = useState({ supplier: '', cnpj: '', products: [], document: '', issueDate: '', totalValue: 0 });
   const [orderProduct, setOrderProduct] = useState({ sku: '', name: '', quantity: 1, price: 0, location: '' });
   const [showNotifications, setShowNotifications] = useState(false);
