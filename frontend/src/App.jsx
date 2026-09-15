@@ -4,7 +4,8 @@ import logo from './assets/logo.jpg';
 import './App.css';
 
 import { collection, onSnapshot, doc, setDoc, deleteDoc, addDoc, getDocs, query, where, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth } from './firebase';
 import emailjs from '@emailjs/browser';
 import { generateDanfeHtml } from './utils/danfeTemplate';
 import { fetchAllSheets, SHEET_TABS } from './utils/sheetsReader';
@@ -719,6 +720,21 @@ function App() {
     setLoginData({...loginData, phone: value});
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!loginData.email) {
+      alert('Por favor, informe seu e-mail de cadastro no campo "E-mail" e clique em "Esqueci minha senha" novamente.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, loginData.email);
+      alert('Se o e-mail estiver cadastrado, um link de restauração de senha foi enviado para ele!');
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao enviar e-mail de recuperação.');
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
@@ -1342,6 +1358,13 @@ function App() {
                       </select>
                     </div>
                   </>
+                )}
+                {loginMode === 'login' && (
+                  <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
+                    <button type="button" onClick={handleForgotPassword} style={{ background: 'none', border: 'none', color: 'var(--brand-orange)', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: '0.9rem' }}>
+                      Esqueci minha senha
+                    </button>
+                  </div>
                 )}
                 <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}>
                   {loginMode === 'login' ? 'Entrar no Sistema' : 'Criar Conta'}
