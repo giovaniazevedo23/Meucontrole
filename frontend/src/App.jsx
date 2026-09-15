@@ -772,35 +772,30 @@ function App() {
       }
       
       if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj && loginData.email) {
-        const userRefCheck = doc(db, 'users', cpfClean);
-        const userSnapCheck = await getDoc(userRefCheck);
-        if (userSnapCheck.exists()) {
-          alert('Esse CPF já está vinculado a outro cadastro.');
-          return;
-        }
-
-        const emailQuery = query(collection(db, 'users'), where('email', '==', loginData.email));
-        const emailSnap = await getDocs(emailQuery);
-        if (!emailSnap.empty) {
-          alert('Esse E-mail já está vinculado a outro cadastro.');
-          return;
-        }
-
-        if (!loginData.password || loginData.password.length < 6) {
-          alert('A senha deve ter no mínimo 6 caracteres.');
-          return;
-        }
-
         try {
-          await createUserWithEmailAndPassword(auth, loginData.email, loginData.password);
-        } catch(err) {
-          if (err.code === 'auth/email-already-in-use') {
-             alert('Este e-mail já está em uso no sistema de autenticação.');
-          } else {
-             alert('Erro ao criar conta: ' + err.message);
+            await createUserWithEmailAndPassword(auth, loginData.email, loginData.password);
+          } catch(err) {
+            if (err.code === 'auth/email-already-in-use') {
+               alert('Este e-mail já está em uso no sistema de autenticação.');
+            } else {
+               alert('Erro ao criar conta: ' + err.message);
+            }
+            return;
           }
-          return;
-        }
+
+          // Agora que está logado, podemos ler o banco de dados sem erro de permissão
+          const userRefCheck = doc(db, 'users', cpfClean);
+          let userSnapCheck;
+          try {
+              userSnapCheck = await getDoc(userRefCheck);
+          } catch(dbErr) {
+              console.error(dbErr);
+          }
+          
+          if (userSnapCheck && userSnapCheck.exists()) {
+            alert('Esse CPF já está vinculado a outro cadastro.');
+            return;
+          }
 
         const userDoc = {
           name: loginData.name,
