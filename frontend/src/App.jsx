@@ -1525,9 +1525,9 @@ function App() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button className="btn-primary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
+                          <button className="btn-primary" style={{ flex: 1, position: 'relative' }} onClick={() => { setInternalChat({ dealId: deal.id, msg: '' }); updateDoc(doc(db, 'deals', deal.id), { chatViewedByAdmin: true }).catch(console.error); }}>
                             Abrir Atendimento (Chat)
-                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
+                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && !deal.chatViewedByAdmin && (
                               <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
                             )}
                           </button>
@@ -1569,9 +1569,9 @@ function App() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button className="btn-secondary" style={{ flex: 1, position: 'relative' }} onClick={() => setInternalChat({ dealId: deal.id, msg: '' })}>
+                          <button className="btn-secondary" style={{ flex: 1, position: 'relative' }} onClick={() => { setInternalChat({ dealId: deal.id, msg: '' }); updateDoc(doc(db, 'deals', deal.id), { chatViewedByAdmin: true }).catch(console.error); }}>
                             Ver Atendimento (Chat)
-                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && (
+                            {deal.messages && deal.messages.length > 0 && deal.messages[deal.messages.length - 1].role === 'client' && !deal.chatViewedByAdmin && (
                               <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '12px', height: '12px', background: 'var(--danger)', borderRadius: '50%', border: '2px solid white' }}></span>
                             )}
                           </button>
@@ -2816,7 +2816,7 @@ function App() {
                             window.open(`https://wa.me/55${cleanNum}`, '_blank');
                           } else alert('Telefone não informado');
                         }}>WhatsApp</button>
-                        <button className="btn-primary" style={{ flex: 1, padding: '0.5rem' }} onClick={() => setSystemDetailsModal(deal)}>
+                        <button className="btn-primary" style={{ flex: 1, padding: '0.5rem' }} onClick={() => { setSystemDetailsModal(deal); updateDoc(doc(db, 'deals', deal.id), { chatViewedByAdmin: true }).catch(console.error); }}>
                           Detalhes
                         </button>
                       </div>
