@@ -3097,7 +3097,7 @@ function App() {
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     SKU do Produto
-                    <button type="button" onClick={() => setSkuGenOpen(!skuGenOpen)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                    <button type="button" onClick={() => setSkuGenOpen(!skuGenOpen)} style={{ background: 'none', border: 'none', color: 'var(--brand-orange)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}>
                       {skuGenOpen ? 'Ocultar Gerador' : '✨ Usar Gerador Automático'}
                     </button>
                   </label>
@@ -3148,7 +3148,7 @@ function App() {
                         </div>
                       </div>
 
-                      <button type="button" onClick={generateSku} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+                      <button type="button" onClick={generateSku} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', backgroundColor: 'var(--brand-orange)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
                         Gerar e Aplicar Código
                       </button>
                     </div>
