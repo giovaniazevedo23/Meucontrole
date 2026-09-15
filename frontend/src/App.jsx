@@ -69,7 +69,20 @@ function App() {
   const [deals, setDeals] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [isBirthdayMessageModalOpen, setIsBirthdayMessageModalOpen] = useState(false);
-  const [birthdayMessageTemplate, setBirthdayMessageTemplate] = useState("Parabéns {nome}! Você acaba de ganhar um cupom de {desconto}% OFF exclusivo para você! Seu código é: {cupom}");
+  const [birthdayMessageTemplate, setBirthdayMessageTemplate] = useState(`Parabéns, {nome}! 🎉
+
+Hoje o dia é todo seu, e nós não poderíamos deixar de comemorar juntos! 🎂
+
+Para deixar o seu aniversário ainda mais especial, preparamos um presente exclusivo para você. Use o cupom abaixo em sua próxima compra e garanta {desconto}% de desconto em todo o nosso site:
+
+🎫 Cupom: *{cupom}*
+
+Aproveite, pois ele é válido por tempo limitado!
+
+Clique no link abaixo para escolher o seu presente:
+🌐 https://cprodutos-controle.onrender.com/
+
+Tenha um dia incrível e cheio de alegrias!`);
   const [birthdayDiscount, setBirthdayDiscount] = useState(25);
   
   const hasUnreadAdmin = deals.some(d => d.source === 'vitrine' && d.status !== 'Ganho' && d.status !== 'Perdido' && !d.viewedByAdmin);
