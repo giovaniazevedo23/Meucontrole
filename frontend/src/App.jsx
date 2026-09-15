@@ -2855,7 +2855,7 @@ function App() {
           email: d.email || d.customerEmail || (matchingCustomer && matchingCustomer.email) || (matchingSheet && matchingSheet['EMAIL']) || 'Não informado',
           address: d.address || (matchingCustomer && matchingCustomer.address) || (matchingSheet && matchingSheet['ENDEREÇO']) || 'Não informado',
           phone: d.phone || d.customerPhone || (matchingCustomer && matchingCustomer.phone) || (matchingSheet && (matchingSheet['N° DE TEEFONE'] || matchingSheet['TELEFONE'])) || 'Não informado',
-          birthday: d.birthday || (matchingCustomer && (matchingCustomer.birthday || matchingCustomer.birthDate)) || (matchingSheet && (matchingSheet['DATA DE NASCIMENTO'] || matchingSheet['ANIVERSÁRIO'])) || '',
+          birthday: d.birthday || (matchingCustomer && (matchingCustomer.birthday || matchingCustomer.birthDate)) || (matchingSheet && (matchingSheet['DATA DE NASCIMENTO'] || matchingSheet['Nascimento/Aniversário'])) || '',
           salesperson: d.salesperson || (matchingSheet && matchingSheet['VENDEDOR ESCOLHIDO']) || 'Nenhum / Auto-atendimento',
           paymentMethod: d.paymentMethod || d.checkoutMethod || (matchingSheet && matchingSheet['METODO DE PAGAMENTO']) || 'Não informado',
           maxDeliveryDays: d.maxDeliveryDays || (matchingSheet && matchingSheet['PRAZO DE ENTREGA']) || '',
@@ -2951,6 +2951,7 @@ function App() {
         </div>
         );
       })()}
+      {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
