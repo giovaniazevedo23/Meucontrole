@@ -2831,22 +2831,29 @@ function App() {
       </main>
 
       {systemDetailsModal && (() => {
-        // Enrich deal data with spreadsheet data if available
+        // Enrich deal data with real-time Firebase customers data and spreadsheet data if needed
         const d = systemDetailsModal;
         const sheetPedidos = (sheetsData && sheetsData['Pedidos vitrine']) || [];
         const sheetVendas = (sheetsData && sheetsData['Vendas e controle']) || [];
+        const sheetClientes = (sheetsData && sheetsData['Clientes vitrine']) || [];
+        
+        const matchingCustomer = customers.find(c => (c.cpf && (c.cpf === d.cpf || c.cpf === d.customerCpf)) || (c.name && c.name.toLowerCase() === (d.client || '').toLowerCase()));
         const matchingSheet = sheetPedidos.find(row => 
           (row['CPF'] && d.cpf && row['CPF'] === d.cpf) ||
           (row['CPF'] && d.customerCpf && row['CPF'] === d.customerCpf) ||
           (row['USUARIO'] && d.client && row['USUARIO'].toLowerCase() === d.client.toLowerCase())
-        ) || sheetVendas.find(row => 
-          (row['NOME DOS CLIENTES'] && d.client && row['NOME DOS CLIENTES'].toLowerCase() === d.client.toLowerCase())
+        ) || sheetClientes.find(row => 
+          (row['CPF'] && d.cpf && row['CPF'] === d.cpf) ||
+          (row['CPF'] && d.customerCpf && row['CPF'] === d.customerCpf) ||
+          (row['NOME'] && d.client && row['NOME'].toLowerCase() === d.client.toLowerCase())
         );
+        
         const enriched = {
           ...d,
-          email: d.email || d.customerEmail || (matchingSheet && matchingSheet['EMAIL']) || 'Não informado',
-          address: d.address || (matchingSheet && matchingSheet['ENDEREÇO']) || 'Não informado',
-          phone: d.phone || d.customerPhone || (matchingSheet && matchingSheet['N° DE TEEFONE']) || 'Não informado',
+          email: d.email || d.customerEmail || (matchingCustomer && matchingCustomer.email) || (matchingSheet && matchingSheet['EMAIL']) || 'Não informado',
+          address: d.address || (matchingCustomer && matchingCustomer.address) || (matchingSheet && matchingSheet['ENDEREÇO']) || 'Não informado',
+          phone: d.phone || d.customerPhone || (matchingCustomer && matchingCustomer.phone) || (matchingSheet && (matchingSheet['N° DE TEEFONE'] || matchingSheet['TELEFONE'])) || 'Não informado',
+          birthday: d.birthday || (matchingCustomer && (matchingCustomer.birthday || matchingCustomer.birthDate)) || (matchingSheet && matchingSheet['DATA DE NASCIMENTO']) || '',
           salesperson: d.salesperson || (matchingSheet && matchingSheet['VENDEDOR ESCOLHIDO']) || 'Nenhum / Auto-atendimento',
           paymentMethod: d.paymentMethod || d.checkoutMethod || (matchingSheet && matchingSheet['METODO DE PAGAMENTO']) || 'Não informado',
           maxDeliveryDays: d.maxDeliveryDays || (matchingSheet && matchingSheet['PRAZO DE ENTREGA']) || '',
@@ -2864,7 +2871,7 @@ function App() {
               <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>Dados do Cliente</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Nome:</strong> {enriched.client || 'Não informado'}</div>
+                  <div><strong>Nome:</strong> {enriched.client || (matchingCustomer && matchingCustomer.name) || 'Não informado'}</div>
                   <div><strong>CPF/CNPJ:</strong> {enriched.cpf || enriched.customerCpf || 'Não informado'}</div>
                   <div><strong>E-mail:</strong> {enriched.email}</div>
                   <div><strong>Telefone:</strong> {enriched.phone}</div>
@@ -2942,10 +2949,6 @@ function App() {
         </div>
         );
       })()}
-
-
-      {/* Add Modal */}
-      {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
