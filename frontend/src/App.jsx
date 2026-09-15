@@ -2846,6 +2846,8 @@ function App() {
           (row['CPF'] && d.cpf && row['CPF'] === d.cpf) ||
           (row['CPF'] && d.customerCpf && row['CPF'] === d.customerCpf) ||
           (row['NOME'] && d.client && row['NOME'].toLowerCase() === d.client.toLowerCase())
+        ) || sheetVendas.find(row => 
+          (row['NOME DOS CLIENTES'] && d.client && row['NOME DOS CLIENTES'].toLowerCase() === d.client.toLowerCase())
         );
         
         const enriched = {
@@ -2853,7 +2855,7 @@ function App() {
           email: d.email || d.customerEmail || (matchingCustomer && matchingCustomer.email) || (matchingSheet && matchingSheet['EMAIL']) || 'Não informado',
           address: d.address || (matchingCustomer && matchingCustomer.address) || (matchingSheet && matchingSheet['ENDEREÇO']) || 'Não informado',
           phone: d.phone || d.customerPhone || (matchingCustomer && matchingCustomer.phone) || (matchingSheet && (matchingSheet['N° DE TEEFONE'] || matchingSheet['TELEFONE'])) || 'Não informado',
-          birthday: d.birthday || (matchingCustomer && (matchingCustomer.birthday || matchingCustomer.birthDate)) || (matchingSheet && matchingSheet['DATA DE NASCIMENTO']) || '',
+          birthday: d.birthday || (matchingCustomer && (matchingCustomer.birthday || matchingCustomer.birthDate)) || (matchingSheet && (matchingSheet['DATA DE NASCIMENTO'] || matchingSheet['ANIVERSÁRIO'])) || '',
           salesperson: d.salesperson || (matchingSheet && matchingSheet['VENDEDOR ESCOLHIDO']) || 'Nenhum / Auto-atendimento',
           paymentMethod: d.paymentMethod || d.checkoutMethod || (matchingSheet && matchingSheet['METODO DE PAGAMENTO']) || 'Não informado',
           maxDeliveryDays: d.maxDeliveryDays || (matchingSheet && matchingSheet['PRAZO DE ENTREGA']) || '',
