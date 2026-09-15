@@ -1591,11 +1591,11 @@ function App() {
               <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Catálogo de Produtos</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <input type="file" id="import-excel" accept=".xlsx,.csv" style={{display: 'none'}} onChange={handleImportExcel} />
-                <button className="btn-secondary" onClick={() => document.getElementById('import-excel').click()} style={{ color: '#00a650', borderColor: '#00a650' }}>
-                  📥 Importar Planilha
+                <button className="btn-secondary" onClick={() =>
+                    Importar Planilha
                 </button>
-                <button className="btn-secondary" onClick={() => setIsCouponModalOpen(true)} style={{ color: '#00a650', borderColor: '#00a650' }}>
-                  🎟️ Adicionar Cupom
+                <button className="btn-secondary" onClick={() =>
+                    Adicionar Cupom
                 </button>
                 <button className="btn-secondary" onClick={() => setIsOfferModalOpen(true)} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
                   Adicionar Oferta
@@ -3095,7 +3095,7 @@ function App() {
                         reader.onloadend = () => {
                           urls.push(reader.result);
                           if(urls.length === files.length) {
-                            setNewItem({...newItem, imageUrls: urls, imageUrl: urls[0]});
+                            setNewItem(prev => { const newUrls = [...(prev.imageUrls || []), ...urls]; return {...prev, imageUrls: newUrls, imageUrl: newUrls[0]}; });
                           }
                         };
                         reader.readAsDataURL(file);
