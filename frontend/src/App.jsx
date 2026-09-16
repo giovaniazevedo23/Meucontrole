@@ -3473,8 +3473,44 @@ Tenha um dia incrível e cheio de alegrias!`);
                 </div>
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>URL da Foto (Opcional)</label>
-                <input type="url" value={editFormData.imageUrl || ''} onChange={e => setEditFormData({...editFormData, imageUrl: e.target.value})} placeholder="https://exemplo.com/foto.jpg" />
+                <label>Fotos do Produto</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', flexWrap: 'wrap' }}>
+                  {(editFormData.imageUrls || []).map((url, i) => (
+                    <div key={i} style={{ position: 'relative' }}>
+                      <img src={url} alt={`Preview ${i}`} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
+                      <button type="button" onClick={() => setEditFormData(prev => ({...prev, imageUrls: prev.imageUrls.filter((_, idx) => idx !== i), imageUrl: prev.imageUrls.length > 1 && i === 0 ? prev.imageUrls[1] : (prev.imageUrls.length === 1 ? '' : prev.imageUrl)}))} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                    </div>
+                  ))}
+                  {editFormData.imageUrl && (!editFormData.imageUrls || editFormData.imageUrls.length === 0) && (
+                    <div style={{ position: 'relative' }}>
+                      <img src={editFormData.imageUrl} alt="Preview" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
+                      <button type="button" onClick={() => setEditFormData(prev => ({...prev, imageUrl: ''}))} style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '10px' }}>X</button>
+                    </div>
+                  )}
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      const urls = [];
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          urls.push(reader.result);
+                          if(urls.length === files.length) {
+                            setEditFormData(prev => { 
+                              const newUrls = [...(prev.imageUrls || []), ...urls]; 
+                              return {...prev, imageUrls: newUrls, imageUrl: newUrls[0]}; 
+                            });
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                    }}
+                    style={{ flex: 1, padding: '0.5rem', border: '1px solid var(--glass-border)', borderRadius: '4px' }}
+                  />
+                </div>
               </div>
               
               <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
