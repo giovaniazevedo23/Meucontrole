@@ -22,7 +22,7 @@ function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
   const [loginMode, setLoginMode] = useState('login'); // 'login' | 'register'
-  const [loginData, setLoginData] = useState({ name: '', email: '', cpf: '', company: '', companyCnpj: '', role: 'Vendedor', phone: '' });
+  const [loginData, setLoginData] = useState({ name: '', email: '', cpf: '', company: '', companyCnpj: '', companyEmail: '', role: 'Vendedor', phone: '' });
   const [showPassword, setShowPassword] = useState(false);
 
   const [items, setItems] = useState([]);
@@ -828,6 +828,7 @@ Tenha um dia incrível e cheio de alegrias!`);
             email: loginData.email,
             cpf: loginData.cpf,
             company: loginData.company,
+            companyEmail: loginData.companyEmail || loginData.email,
             companyCnpj: loginData.companyCnpj,
             role: loginData.role,
             phone: loginData.phone || '',
@@ -1442,6 +1443,16 @@ Tenha um dia incrível e cheio de alegrias!`);
                           v = v.replace(/(\d{4})(\d)/, '$1-$2');
                           setLoginData({...loginData, companyCnpj: v});
                         }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>E-mail da Empresa</label>
+                      <input 
+                        type="email" 
+                        required 
+                        placeholder="contato@empresa.com"
+                        value={loginData.companyEmail}
+                        onChange={e => setLoginData({...loginData, companyEmail: e.target.value})}
                       />
                     </div>
                     <div className="form-group" style={{ marginBottom: '2rem' }}>
