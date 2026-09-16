@@ -1987,7 +1987,16 @@ Tenha um dia incrível e cheio de alegrias!`);
               
               const isHighDemand = (item.sold || 0) > 0 && item.quantity > 0 && item.quantity <= 15;
               
-              return { ...item, curva, isHighDemand };
+              // Critérios Inteligentes de Reposição
+              const sold = item.sold || 0;
+              const isSellingFast = sold > 0 && item.quantity <= (sold * 0.3); // Estoque menor que 30% do total vendido
+              const needsRestock = 
+                (curva === 'A' && item.quantity <= 15) || 
+                (curva === 'B' && item.quantity <= 10) || 
+                (curva === 'C' && item.quantity <= 5) || 
+                isSellingFast;
+              
+              return { ...item, curva, isHighDemand, needsRestock };
             });
 
           return (
@@ -2027,7 +2036,7 @@ Tenha um dia incrível e cheio de alegrias!`);
                           <td>{item.quantity}</td>
                           <td><strong>R$ {item.totalValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td>
                           <td>
-                            {item.curva === 'A' && item.quantity <= 10 ? (
+                            {item.needsRestock ? (
                               <button className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'var(--danger)', boxShadow: 'none' }} onClick={() => { setActiveTab('compras'); setIsOrderModalOpen(true); }}>
                                  Reposição Imediata
                               </button>
