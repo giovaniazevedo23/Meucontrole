@@ -3472,10 +3472,24 @@ Tenha um dia incrível e cheio de alegrias!`);
                   <span>Sim, oferecer frete grátis</span>
                 </div>
               </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>URL da Foto (Opcional)</label>
+                <input type="url" value={editFormData.imageUrl || ''} onChange={e => setEditFormData({...editFormData, imageUrl: e.target.value})} placeholder="https://exemplo.com/foto.jpg" />
+              </div>
               
-              <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
-                <button type="button" className="btn-secondary" onClick={() => { setIsEditModalOpen(false); setEditItem(null); }}>Cancelar</button>
-                <button type="submit" className="btn-primary">Salvar Alterações</button>
+              <div className="form-actions" style={{ gridColumn: '1 / -1', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button type="button" style={{ background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '8px', padding: '0.75rem 1.5rem', cursor: 'pointer', fontWeight: 'bold' }} onClick={async () => {
+                  if (window.confirm("Deseja realmente apagar este produto?")) {
+                    await handleDelete(editItem.id);
+                    setIsEditModalOpen(false);
+                    setEditItem(null);
+                  }
+                }}>Apagar Produto</button>
+                
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button type="button" className="btn-secondary" onClick={() => { setIsEditModalOpen(false); setEditItem(null); }}>Cancelar</button>
+                  <button type="submit" className="btn-primary">Salvar Alterações</button>
+                </div>
               </div>
             </form>
           </div>
