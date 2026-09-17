@@ -22,7 +22,7 @@ function App() {
   // Auth & User State
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('controle_user')) || null);
   const [loginMode, setLoginMode] = useState('login'); // 'login' | 'register'
-  const [loginData, setLoginData] = useState({ name: '', email: '', cpf: '', company: '', companyCnpj: '', companyEmail: '', role: 'Vendedor', phone: '' });
+  const [loginData, setLoginData] = useState({ name: '', email: '',  company: '', companyCnpj: '', companyEmail: '', role: 'Vendedor', phone: '' });
   const [showPassword, setShowPassword] = useState(false);
 
   const [items, setItems] = useState([]);
@@ -90,7 +90,7 @@ Tenha um dia incrível e cheio de alegrias!`);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [trackingModal, setTrackingModal] = useState(null);
   const [internalChat, setInternalChat] = useState(null);
-  const [newDeal, setNewDeal] = useState({ client: '', phone: '', customerCpf: '', birthday: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
+  const [newDeal, setNewDeal] = useState({ client: '', phone: '', customer birthday: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
   const [crmTab, setCrmTab] = useState('dashboard');
   const [salesGoal, setSalesGoal] = useState(() => JSON.parse(localStorage.getItem('controle_goal')) || 30500);
@@ -760,10 +760,7 @@ Tenha um dia incrível e cheio de alegrias!`);
   const handleLogin = async (e) => {
     e.preventDefault();
     const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
-    if (!cpfRegex.test(loginData.cpf)) {
-      alert("Por favor, insira um CPF válido no formato 000.000.000-00");
-      return;
-    }
+    
 
     const cpfClean = loginData.cpf.replace(/\D/g, '');
 
@@ -775,7 +772,7 @@ Tenha um dia incrível e cheio de alegrias!`);
         }
         await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
         
-        const userRef = doc(db, 'users', cpfClean);
+        const userRef = doc(db, 'users', loginData.email);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const userData = userSnap.data();
@@ -797,7 +794,7 @@ Tenha um dia incrível e cheio de alegrias!`);
         return;
       }
       
-      if (loginData.name && loginData.cpf && loginData.company && loginData.companyCnpj && loginData.email) {
+      if (loginData.name && loginData.company && loginData.companyCnpj && loginData.email) {
         try {
             await createUserWithEmailAndPassword(auth, loginData.email, loginData.password);
           } catch(err) {
@@ -810,7 +807,7 @@ Tenha um dia incrível e cheio de alegrias!`);
           }
 
           // Agora que está logado, podemos ler o banco de dados sem erro de permissão
-          const userRefCheck = doc(db, 'users', cpfClean);
+          const userRefCheck = doc(db, 'users', loginData.email);
           let userSnapCheck;
           try {
               userSnapCheck = await getDoc(userRefCheck);
@@ -826,7 +823,7 @@ Tenha um dia incrível e cheio de alegrias!`);
         const userDoc = {
             name: loginData.name,
             email: loginData.email,
-            cpf: loginData.cpf,
+            
             company: loginData.company,
             companyEmail: loginData.companyEmail || loginData.email,
             companyCnpj: loginData.companyCnpj,
@@ -834,7 +831,7 @@ Tenha um dia incrível e cheio de alegrias!`);
             phone: loginData.phone || '',
             createdAt: new Date().toISOString()
           };
-          await setDoc(doc(db, 'users', cpfClean), userDoc);
+          await setDoc(doc(db, 'users', loginData.email), userDoc);
           
           if (loginData.companyCnpj && loginData.company) {
              const compRef = doc(db, 'companies', loginData.companyCnpj.replace(/\D/g, ''));
@@ -1466,6 +1463,16 @@ Tenha um dia incrível e cheio de alegrias!`);
                       />
                     </div>
                     <div className="form-group" style={{ marginBottom: '2rem' }}>
+                      <label>Seu WhatsApp</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="(00) 00000-0000"
+                        value={loginData.phone}
+                        onChange={handlePhoneChangeAdmin}
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
                       <label>Cargo (Perfil de Acesso)</label>
                       <select 
                         value={loginData.role}
@@ -1473,7 +1480,6 @@ Tenha um dia incrível e cheio de alegrias!`);
                         style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
                       >
                         <option value="Vendedor">Vendedor</option>
-                        <option value="Gestor">Gestor</option>
                         <option value="Administrador">Administrador</option>
                       </select>
                     </div>
@@ -4040,7 +4046,7 @@ Tenha um dia incrível e cheio de alegrias!`);
               <button type="button" className="btn-secondary" onClick={() => setIsProfileModalOpen(false)}>Cancelar</button>
               <button type="button" className="btn-primary" onClick={async () => {
                 const cpfClean = currentUser.cpf.replace(/\D/g, '');
-                const userRef = doc(db, 'users', cpfClean);
+                const userRef = doc(db, 'users', loginData.email);
                 try {
                   await setDoc(userRef, {
                     name: tempProfile.name,
@@ -4556,3 +4562,4 @@ Tenha um dia incrível e cheio de alegrias!`);
 }
 
 export default App;
+
