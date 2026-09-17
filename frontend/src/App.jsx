@@ -90,7 +90,7 @@ Tenha um dia incrível e cheio de alegrias!`);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [trackingModal, setTrackingModal] = useState(null);
   const [internalChat, setInternalChat] = useState(null);
-  const [newDeal, setNewDeal] = useState({ client: '', phone: '', customer birthday: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
+  const [newDeal, setNewDeal] = useState({ client: '', phone: '', customerCpf: '', salesperson: currentUser?.name || '', title: '', value: 0, products: [] });
   const [dealProduct, setDealProduct] = useState({ sku: '', name: '', quantity: 1, price: 0 });
   const [crmTab, setCrmTab] = useState('dashboard');
   const [salesGoal, setSalesGoal] = useState(() => JSON.parse(localStorage.getItem('controle_goal')) || 30500);
@@ -1399,17 +1399,7 @@ Tenha um dia incrível e cheio de alegrias!`);
                   </>
                 )}
                 
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>CPF</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="000.000.000-00"
-                    value={loginData.cpf}
-                    onChange={handleCpfChange}
-                    maxLength="14"
-                  />
-                </div>
+                
 
                 {loginMode === 'register' && (
                   <>
@@ -4562,4 +4552,5 @@ Tenha um dia incrível e cheio de alegrias!`);
 }
 
 export default App;
+
 
