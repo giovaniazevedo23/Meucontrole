@@ -1057,6 +1057,7 @@ Tenha um dia incrível e cheio de alegrias!`);
       const deal = deals.find(d => d.id === internalChat.dealId);
       const currentMessages = deal?.messages || [];
       await updateDoc(dealRef, {
+        clientRead: false,
         messages: [...currentMessages, {
           sender: currentUser.name,
           role: 'admin',
