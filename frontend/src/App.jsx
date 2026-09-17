@@ -1661,9 +1661,6 @@ Tenha um dia incrível e cheio de alegrias!`);
           <button className={activeTab === 'pedidos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('pedidos')} style={activeTab !== 'pedidos' ? { color: 'var(--text-primary)' } : {}}>
             Pedidos Solicitados
           </button>
-          <button className={activeTab === 'lojas' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('lojas')} style={activeTab !== 'lojas' ? { color: 'var(--text-primary)' } : {}}>
-            Lojas
-          </button>
           <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>Sistema</button>
         </nav>
 
@@ -2721,79 +2718,6 @@ Tenha um dia incrível e cheio de alegrias!`);
           </>
         )}
       </>
-    )}
-
-    {activeTab === 'lojas' && (
-      <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
-        <h2 style={{ color: 'var(--text-primary)', marginBottom: '1.5rem' }}>Gerenciar Lojas (Empresas)</h2>
-        
-        <form onSubmit={handleAddCompany} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '1rem', marginBottom: '2rem', alignItems: 'end' }}>
-          <div className="form-group">
-            <label>Nome da Loja/Empresa</label>
-            <input 
-              type="text" 
-              required
-              placeholder="Ex: Minha Loja LTDA"
-              value={newCompany.name}
-              onChange={e => setNewCompany({...newCompany, name: e.target.value})}
-            />
-          </div>
-          <div className="form-group">
-            <label>CNPJ</label>
-            <input 
-              type="text" 
-              required
-              placeholder="00.000.000/0001-00"
-              value={newCompany.cnpj}
-              maxLength={18}
-              onChange={e => {
-                let v = e.target.value.replace(/\D/g, '');
-                if (v.length > 14) v = v.slice(0, 14);
-                v = v.replace(/^(\d{2})(\d)/, '$1.$2');
-                v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-                v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
-                v = v.replace(/(\d{4})(\d)/, '$1-$2');
-                setNewCompany({...newCompany, cnpj: v});
-              }}
-            />
-          </div>
-          <button type="submit" className="btn-primary" style={{ padding: '0.8rem 1.5rem' }}>Adicionar</button>
-        </form>
-
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Nome da Loja</th>
-                <th>CNPJ</th>
-                <th style={{ width: '80px', textAlign: 'center' }}>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map(comp => (
-                <tr key={comp.id}>
-                  <td>{comp.name}</td>
-                  <td>{comp.cnpj}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button 
-                      className="btn-secondary"
-                      style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '0.25rem 0.5rem' }}
-                      onClick={() => handleDeleteCompany(comp.id)}
-                    >
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {companies.length === 0 && (
-                <tr>
-                  <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhuma loja cadastrada ainda.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     )}
 
     {isDevManagerOpen && (
