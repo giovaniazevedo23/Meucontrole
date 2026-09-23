@@ -1639,29 +1639,29 @@ Tenha um dia incrível e cheio de alegrias!`);
 
       {/* Main Content */}
       <main className="main-content">
-        <nav className="glass-panel" style={{ display: 'flex', gap: '1rem', padding: '1rem 1.5rem', marginBottom: '1.5rem', borderRadius: '1rem', overflowX: 'auto' }}>
-          <button className={activeTab === 'produtos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('produtos')} style={activeTab !== 'produtos' ? { color: 'var(--text-primary)' } : {}}>
-            Produtos
-          </button>
-          <button className={activeTab === 'estoque' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('estoque')} style={activeTab !== 'estoque' ? { color: 'var(--text-primary)' } : {}}>
-            Estoque Atual
-          </button>
-          <button className={activeTab === 'movimentacoes' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('movimentacoes')} style={activeTab !== 'movimentacoes' ? { color: 'var(--text-primary)' } : {}}>
-            Histórico de Movimentações
-          </button>
-          <button className={activeTab === 'relatorios' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('relatorios')} style={activeTab !== 'relatorios' ? { color: 'var(--text-primary)' } : {}}>
-            Relatórios e Indicadores
-          </button>
-          <button className={activeTab === 'compras' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('compras')} style={activeTab !== 'compras' ? { color: 'var(--text-primary)' } : {}}>
-            Compras
-          </button>
-          <button className={activeTab === 'crm' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('crm')} style={activeTab !== 'crm' ? { color: 'var(--text-primary)' } : {}}>
-            Vendas
-          </button>
-          <button className={activeTab === 'pedidos' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('pedidos')} style={activeTab !== 'pedidos' ? { color: 'var(--text-primary)' } : {}}>
-            Pedidos Solicitados
-          </button>
-          <button className={activeTab === 'sistema' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('sistema')} style={activeTab !== 'sistema' ? { color: 'var(--text-primary)' } : {}}>Sistema</button>
+        <nav className="main-nav-tabs">
+          {[
+            { id: 'produtos', title: 'Produtos', subtitle: 'Catálogo de produtos', icon: '📦', color: '#3b82f6' },
+            { id: 'estoque', title: 'Estoque Atual', subtitle: 'Visão geral', icon: '📊', color: '#10b981' },
+            { id: 'movimentacoes', title: 'Histórico de Movimentações', subtitle: 'Entradas e saídas', icon: '🔄', color: '#f59e0b' },
+            { id: 'relatorios', title: 'Relatórios e Indicadores', subtitle: 'Curva ABC e mais', icon: '📈', color: '#8b5cf6' },
+            { id: 'compras', title: 'Compras', subtitle: 'Reposição de estoque', icon: '🛒', color: '#ec4899' },
+            { id: 'crm', title: 'Vendas', subtitle: 'Gestão de vendas', icon: '💰', color: '#14b8a6' },
+            { id: 'pedidos', title: 'Pedidos Solicitados', subtitle: 'Pedidos abertos', icon: '📋', color: '#f43f5e' },
+            { id: 'sistema', title: 'Sistema', subtitle: 'Configurações gerais', icon: '⚙️', color: '#64748b' }
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              className={`nav-tab-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <div className="nav-tab-icon" style={{ color: tab.color, backgroundColor: `${tab.color}15` }}>{tab.icon}</div>
+              <div className="nav-tab-content">
+                <span className="nav-tab-title">{tab.title}</span>
+                <span className="nav-tab-subtitle">{tab.subtitle}</span>
+              </div>
+            </button>
+          ))}
         </nav>
 
 
